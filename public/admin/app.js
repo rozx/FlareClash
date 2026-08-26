@@ -427,6 +427,59 @@ async function deleteSource(src) {
 
 // ── Token 管理页 ────────────────────────────────────
 
+/** 值卡片控件：名称 + 说明 + 只读文本框 + 右上角复制按钮（编辑弹窗与创建成功输出共用）
+ *  文本框支持全选/手动复制，click 即全选，readonly 防误改 */
+function valueCard({ name, desc, value, toastMsg }) {
+  const input = el("input", {
+    type: "text",
+    class: "mono",
+    readonly: true,
+    value,
+    onclick: () => input.select(),
+  });
+  return el(
+    "div",
+    { class: "url-group" },
+    el(
+      "div",
+      { class: "url-group-head" },
+      el("div", { class: "url-group-name", text: name }),
+      el("button", {
+        type: "button",
+        class: "small",
+        text: "复制",
+        onclick: () => copyText(value, toastMsg),
+      }),
+    ),
+    desc ? el("div", { class: "url-group-desc", text: desc }) : null,
+    input,
+  );
+}
+
+/** token 的三格式订阅地址卡片组（编辑弹窗与创建成功输出共用） */
+function subUrlCards(subBase, tokenStr) {
+  return [
+    valueCard({
+      name: "自动识别",
+      desc: "按客户端 User-Agent 自动选择输出格式",
+      value: `${subBase}/${tokenStr}`,
+      toastMsg: "自动识别 URL 已复制",
+    }),
+    valueCard({
+      name: "Clash / Mihomo",
+      desc: "YAML 确定性格式",
+      value: `${subBase}/clash/${tokenStr}`,
+      toastMsg: "Clash URL 已复制",
+    }),
+    valueCard({
+      name: "Hiddify / 通用",
+      desc: "Base64 链接列表",
+      value: `${subBase}/base64/${tokenStr}`,
+      toastMsg: "Base64 URL 已复制",
+    }),
+  ];
+}
+
 function tokenStatusCell(t) {
   const cell = el("td");
   if (t.enabled !== 1) cell.append(badge("已禁用", "muted"));
@@ -437,27 +490,14 @@ function tokenStatusCell(t) {
 }
 
 function tokenRowActions(t, sources) {
+  // 全部地址在编辑弹窗展示；列表行仅保留自动识别 URL 快捷复制，避免操作列出框
   const adaptiveUrl = `${location.origin}/sub/${t.token}`;
-  const clashUrl = `${location.origin}/sub/clash/${t.token}`;
-  const base64Url = `${location.origin}/sub/base64/${t.token}`;
   return el(
     "td",
     { style: "white-space:nowrap" },
     el("button", {
       class: "small",
-      text: "复制 Clash URL",
-      onclick: () => copyText(clashUrl, "Clash URL 已复制"),
-    }),
-    " ",
-    el("button", {
-      class: "small",
-      text: "复制 Base64 URL",
-      onclick: () => copyText(base64Url, "Base64 URL 已复制"),
-    }),
-    " ",
-    el("button", {
-      class: "small",
-      text: "自动识别 URL",
+      text: "复制自动识别 URL",
       onclick: () => copyText(adaptiveUrl, "自动识别 URL 已复制"),
     }),
     " ",
@@ -523,15 +563,9 @@ async function renderTokensPage(page) {
       el(
         "tr",
         {},
-        ...[
-          "名称",
-          "状态",
-          "Token",
-          "绑定源",
-          "最后使用",
-          "过期时间",
-          "操作",
-        ].map((h) => el("th", { text: h })),
+        ...["名称", "状态", "绑定源", "最后使用", "过期时间", "操作"].map((h) =>
+          el("th", { text: h }),
+        ),
       ),
     ),
     el(
@@ -543,7 +577,6 @@ async function renderTokensPage(page) {
           {},
           el("td", { text: t.name || "（未命名）" }),
           tokenStatusCell(t),
-          el("td", { class: "wrap mono", text: `${t.token.slice(0, 10)}…` }),
           el("td", { text: t.source_ids.map(sourceName).join("、") || "—" }),
           el("td", { class: "mono", text: fmtTime(t.last_used_at) }),
           el("td", {
@@ -570,7 +603,7 @@ async function renderTokensPage(page) {
       ),
       tokens.length === 0
         ? el("div", { class: "empty", text: "还没有 access token" })
-        : table,
+        : el("div", { class: "table-scroll" }, table),
     ),
   );
 }
@@ -613,6 +646,23 @@ function tokenDialog(t, sources) {
       ? [el("span", { class: "empty", text: "请先创建源订阅" })]
       : []),
   );
+
+  // 编辑模式：展示 token 本体与全部订阅地址（列表行仅保留自动识别 URL 快捷复制）
+  const subBase = `${location.origin}/sub`;
+  const urlsSection = isEdit
+    ? el(
+        "div",
+        { class: "token-urls" },
+        el("div", { class: "token-urls-title", text: "凭据与订阅地址" }),
+        valueCard({
+          name: "Token",
+          desc: "订阅凭据，即地址中 /sub/ 之后的部分；泄露后任何人可凭它拉取订阅",
+          value: t.token,
+          toastMsg: "Token 已复制",
+        }),
+        ...subUrlCards(subBase, t.token),
+      )
+    : null;
 
   const err = el("div", { class: "form-error" });
   const successOut = el("div", {
@@ -662,36 +712,16 @@ function tokenDialog(t, sources) {
               method: "POST",
               body: JSON.stringify(payload),
             });
-            // 创建成功后给出确定性格式 URL，避免依赖客户端 User-Agent
-            const adaptiveUrl = `${location.origin}/sub/${token.token}`;
-            const clashUrl = `${location.origin}/sub/clash/${token.token}`;
-            const base64Url = `${location.origin}/sub/base64/${token.token}`;
+            // 创建成功后展示 token 与确定性格式 URL，避免依赖客户端 User-Agent
             successOut.replaceChildren(
-              el("div", { text: "✓ 创建成功！按客户端复制对应地址：" }),
-              el("br"),
-              el("div", { text: "Clash / Mihomo（YAML）" }),
-              el("div", { class: "mono", text: clashUrl }),
-              el("button", {
-                type: "button",
-                text: "复制 Clash URL",
-                onclick: () => copyText(clashUrl),
+              el("div", { text: "✓ 创建成功！复制对应地址发给使用者：" }),
+              valueCard({
+                name: "Token",
+                desc: "订阅凭据，即地址中 /sub/ 之后的部分；泄露后任何人可凭它拉取订阅",
+                value: token.token,
+                toastMsg: "Token 已复制",
               }),
-              el("br"),
-              el("br"),
-              el("div", { text: "Hiddify / 通用（Base64 链接）" }),
-              el("div", { class: "mono", text: base64Url }),
-              el("button", {
-                type: "button",
-                text: "复制 Base64 URL",
-                onclick: () => copyText(base64Url),
-              }),
-              el("br"),
-              el("br"),
-              el("button", {
-                type: "button",
-                text: "复制自动识别 URL",
-                onclick: () => copyText(adaptiveUrl),
-              }),
+              ...subUrlCards(`${location.origin}/sub`, token.token),
             );
             successOut.style.display = "block";
             submitBtn.textContent = "完成";
@@ -705,6 +735,7 @@ function tokenDialog(t, sources) {
     field("备注名（给谁用的）", nameIn),
     field("过期时间（留空 = 永不过期）", expIn),
     field("绑定的源（可多选）", checks),
+    urlsSection,
     successOut,
     err,
     footer,
