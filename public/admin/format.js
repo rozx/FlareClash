@@ -41,7 +41,9 @@ export function formatExpire(metadata) {
 
 export function formatInterval(metadata) {
   const interval = metadata?.profileUpdateInterval;
-  return typeof interval === "number" && Number.isInteger(interval) && interval > 0
+  return typeof interval === "number" &&
+    Number.isInteger(interval) &&
+    interval > 0
     ? `${interval} 小时`
     : "暂无";
 }

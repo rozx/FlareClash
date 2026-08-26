@@ -28,7 +28,10 @@ export function parseSubscriptionUserInfo(
   for (const part of raw.split(";")) {
     const eq = part.indexOf("=");
     if (eq <= 0) continue;
-    fields.set(part.slice(0, eq).trim().toLowerCase(), part.slice(eq + 1).trim());
+    fields.set(
+      part.slice(0, eq).trim().toLowerCase(),
+      part.slice(eq + 1).trim(),
+    );
   }
   const upload = nonNegativeInteger(fields.get("upload"));
   const download = nonNegativeInteger(fields.get("download"));
@@ -93,7 +96,9 @@ export function isSubscriptionMetadata(
   ) {
     return false;
   }
-  return meta.userInfo !== undefined || meta.profileUpdateInterval !== undefined;
+  return (
+    meta.userInfo !== undefined || meta.profileUpdateInterval !== undefined
+  );
 }
 
 function safeSum(values: number[]): number | null {
@@ -154,9 +159,7 @@ export function renderSubscriptionMetadataHeaders(
     ].join("; ");
   }
   if (metadata.profileUpdateInterval !== undefined) {
-    headers["profile-update-interval"] = String(
-      metadata.profileUpdateInterval,
-    );
+    headers["profile-update-interval"] = String(metadata.profileUpdateInterval);
   }
   return headers;
 }

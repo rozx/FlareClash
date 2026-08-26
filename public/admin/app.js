@@ -1,8 +1,4 @@
-import {
-  formatExpire,
-  formatInterval,
-  formatUsage,
-} from "./format.js";
+import { formatExpire, formatInterval, formatUsage } from "./format.js";
 
 /**
  * FlareClash 管理后台 SPA（无构建，原生 ES module，纯 DOM 构造，无 innerHTML）

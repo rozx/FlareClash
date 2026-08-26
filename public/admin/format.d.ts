@@ -10,5 +10,9 @@ export interface AdminSubscriptionMetadata {
 
 export function formatBytes(bytes: number): string;
 export function formatUsage(metadata: AdminSubscriptionMetadata | null): string;
-export function formatExpire(metadata: AdminSubscriptionMetadata | null): string;
-export function formatInterval(metadata: AdminSubscriptionMetadata | null): string;
+export function formatExpire(
+  metadata: AdminSubscriptionMetadata | null,
+): string;
+export function formatInterval(
+  metadata: AdminSubscriptionMetadata | null,
+): string;

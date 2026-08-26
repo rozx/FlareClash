@@ -67,8 +67,7 @@ async function fetchUpstream(
   deps: FetcherDeps,
   source: FetchSource,
 ): Promise<
-  | { content: string; metadata: SubscriptionMetadata | null }
-  | { error: string }
+  { content: string; metadata: SubscriptionMetadata | null } | { error: string }
 > {
   let resp: Response;
   try {
