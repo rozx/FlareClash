@@ -103,6 +103,24 @@ describe("管理员认证", () => {
     );
     expect(r2.status).toBe(401);
   });
+
+  it("_ping 需认证且返回部署版本字段", async () => {
+    const unauth = await app.request(
+      "/api/_ping",
+      {},
+      env,
+      createExecutionContext(),
+    );
+    expect(unauth.status).toBe(401);
+
+    await login();
+    const r = await req("/api/_ping");
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { ok: boolean; version: string };
+    expect(body.ok).toBe(true);
+    // 测试环境未注入 COMMIT_HASH，回退 "dev"；生产部署注入 git short hash
+    expect(body.version).toBe("dev");
+  });
 });
 
 describe("源订阅管理", () => {

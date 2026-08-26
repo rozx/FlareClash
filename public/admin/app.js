@@ -7,6 +7,9 @@ import { formatExpire, formatInterval, formatUsage } from "./format.js";
 
 const app = document.getElementById("app");
 
+/** 部署版本（commit hash）：启动时从 /api/_ping 获取，页脚展示 */
+let APP_VERSION = "";
+
 // ── 工具 ────────────────────────────────────────────
 
 /** DOM 构造器：attrs 支持 class、text、on 事件与布尔属性，children 为节点或文本 */
@@ -117,8 +120,14 @@ function renderLogin() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password: pw.value }),
         });
-        if (res.ok) renderMain();
-        else
+        if (res.ok) {
+          // 登录成功后补取部署版本（页脚展示），再进主界面
+          const r2 = await fetch("/api/_ping").catch(() => null);
+          const d = r2?.ok ? await r2.json().catch(() => ({})) : {};
+          if (typeof d.version === "string" && d.version)
+            APP_VERSION = d.version;
+          renderMain();
+        } else
           err.textContent =
             res.status === 401 ? "密码错误" : `登录失败（${res.status}）`;
       },
@@ -166,6 +175,27 @@ function renderMain() {
       }),
     ),
     el("main", { id: "page" }),
+    el(
+      "footer",
+      { class: "page-footer" },
+      "FlareClash · by ",
+      el("a", {
+        href: "https://github.com/rozx",
+        target: "_blank",
+        rel: "noreferrer",
+        text: "rozx",
+      }),
+      " · ",
+      el("a", {
+        href: "https://github.com/rozx/FlareClash",
+        target: "_blank",
+        rel: "noreferrer",
+        text: "GitHub",
+      }),
+      APP_VERSION
+        ? el("span", { class: "mono", text: ` · ${APP_VERSION}` })
+        : null,
+    ),
   );
   window.addEventListener("hashchange", route);
   route();
@@ -747,6 +777,11 @@ function tokenDialog(t, sources) {
 
 (async () => {
   const res = await fetch("/api/_ping").catch(() => null);
-  if (res && res.ok) renderMain();
-  else renderLogin();
+  if (res && res.ok) {
+    // 顺带取部署版本（未注入时后端返回 "dev"）供页脚展示
+    const data = await res.json().catch(() => ({}));
+    if (typeof data.version === "string" && data.version)
+      APP_VERSION = data.version;
+    renderMain();
+  } else renderLogin();
 })();

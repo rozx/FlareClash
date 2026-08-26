@@ -29,6 +29,10 @@ import {
 
 const api = new Hono<{ Bindings: Env }>();
 
+// 部署时由 wrangler --define 注入 git commit hash（见 package.json deploy/dev 脚本）；
+// 本地 vitest / 未注入时标识符不存在，typeof 守卫回退 "dev"
+declare const COMMIT_HASH: string | undefined;
+
 /** 认证中间件：保护除 /login 外的全部 /api/*（规格 admin-management「管理员认证」） */
 api.use("*", async (c, next) => {
   if (c.req.path === "/api/login") return next();
@@ -40,7 +44,13 @@ api.use("*", async (c, next) => {
   return next();
 });
 
-api.get("/_ping", (c) => c.json({ ok: true }));
+// 登录态探测：管理页启动/登录后探测会话，顺带返回部署版本供页脚展示
+api.get("/_ping", (c) =>
+  c.json({
+    ok: true,
+    version: typeof COMMIT_HASH === "undefined" ? "dev" : COMMIT_HASH,
+  }),
+);
 
 // ── 认证 ─────────────────────────────────────────────
 
