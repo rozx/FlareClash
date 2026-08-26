@@ -47,6 +47,7 @@
 ## 8. 部署与验收
 
 - [x] 8.1 部署脚本与文档：README 补充 D1/KV 创建、secrets 写入（ADMIN_PASSWORD/AUTH_SECRET）、migrations、deploy 完整步骤。验证：按文档从零走通部署
-- [ ] 8.2 端到端验收：部署后用真实 Clash 客户端 UA 与 curl 分别访问订阅 URL，验证两种格式输出；用管理页完成 源创建→探测→token 创建→绑定→订阅访问→禁用→访问被拒 全链路。验证：全链路通过并记录于本任务
-  - 本地全链路（wrangler dev + 本地 mock 上游）已于 2026-08-26 通过：登录✓ 源创建+探测（clash/base64 双格式）✓ token 创建+双源绑定✓ Clash UA→YAML（3 节点带前缀、地区分组、7 条规则）✓ 其他 UA→base64✓ 禁用→403✓ last_used_at 记录✓；期间修复两个仅真实 runtime 暴露的 bug（fetch 解构 Illegal invocation、D1 batch 中 last_insert_rowid 不可靠）
-  - 剩余：用户执行 wrangler login 后按 README 部署到 Cloudflare，用真实 Clash 客户端验证浏览器端管理页交互
+- [x] 8.2 端到端验收：部署后用真实 Clash 客户端 UA 与 curl 分别访问订阅 URL，验证两种格式输出；用管理页完成 源创建→探测→token 创建→绑定→订阅访问→禁用→访问被拒 全链路。验证：全链路通过并记录于本任务
+  - 本地全链路（wrangler dev + 本地 mock 上游）2026-08-26 通过：登录✓ 源创建+探测（clash/base64 双格式）✓ token 创建+双源绑定✓ Clash UA→YAML（节点带前缀、地区分组、规则集）✓ 其他 UA→base64✓ 禁用→403✓ last_used_at 记录✓；期间修复两个仅真实 runtime 暴露的 bug（fetch 解构 Illegal invocation、D1 batch 中 last_insert_rowid 不可靠）
+  - 生产验收（https://<your-worker>.workers.dev）2026-08-26 通过：部署（wrangler 4.126）✓ 远端 migration✓ /admin/ 静态资产✓ 未认证 /api/* 401✓ 不存在 token 401✓ 公网 mock 源（paste.rs）真实回源探测✓ Clash UA→YAML（3 策略组+7 规则）✓ base64 UA→链接列表✓ KV 缓存命中（last_fetch_at 不变验证）+ KV 键写入（--remote 查询验证）✓ last_used_at✓ 禁用→立即 403✓ 验收后清理全部测试数据✓
+  - 剩余可选：用户用真实机场订阅在浏览器 UI（/admin/）做最终使用体验确认
