@@ -209,8 +209,7 @@ describe("GET /sub/:token — 格式自适应", () => {
       .reply(200, UPSTREAM_B);
     await seed();
     const r = await request(`/sub/${TOKEN}`, {
-      "User-Agent":
-        "HiddifyNext/2.5.7 (android) like ClashMeta v2ray sing-box",
+      "User-Agent": "HiddifyNext/2.5.7 (android) like ClashMeta v2ray sing-box",
     });
     expect(r.status).toBe(200);
     expect(r.headers.get("Content-Type")).toContain("text/plain");
