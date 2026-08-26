@@ -18,10 +18,10 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.19",
-    "@cloudflare/workers-types": "^4.20250906.0",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260826.1",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.5",
-    "wrangler": "4.35.0"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.126.0"
   }
 }

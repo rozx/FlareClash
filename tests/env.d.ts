@@ -1,7 +1,10 @@
-/// <reference types="@cloudflare/vitest-pool-workers" />
-import type { Env } from "../src/env";
+// vpw 0.22：类型经由 exports 子路径 "./types" 引入（bundler 解析走 exports map）
+import type {} from "@cloudflare/vitest-pool-workers/types";
+import type { Env as ProjectEnv } from "../src/env";
 
-// 让 `import { env } from "cloudflare:test"` 携带项目自定义绑定类型
-declare module "cloudflare:test" {
-  interface ProvidedEnv extends Env {}
+// vpw 0.22：env 类型改为全局 Cloudflare.Env 增强点（ProvidedEnv 已移除）
+declare global {
+  namespace Cloudflare {
+    interface Env extends ProjectEnv {}
+  }
 }

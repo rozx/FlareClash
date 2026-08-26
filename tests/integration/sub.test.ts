@@ -1,7 +1,13 @@
-import { createExecutionContext, env, fetchMock } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import {
+  createExecutionContext,
+  env,
+  reset,
+  waitOnExecutionContext,
+} from "cloudflare:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../../src/index";
 import { ensureSchema } from "./schema";
+import { installUpstreamMock, type UpstreamMock } from "./mock-upstream";
 
 const UPSTREAM_A = [
   "ss://YWVzLTEyOC1nY206cGFzc3dvcmQ=@a1.example.com:8388#香港01",
@@ -42,13 +48,20 @@ async function seed(opts?: {
   ]);
 }
 
-function request(path: string, headers: Record<string, string> = {}) {
-  return app.request(path, { headers }, env, createExecutionContext());
+/** 请求并冲刷 waitUntil（确保异步写完成，避免与 reset() 竞态） */
+async function request(path: string, headers: Record<string, string> = {}) {
+  const ctx = createExecutionContext();
+  const res = await app.request(path, { headers }, env, ctx);
+  await waitOnExecutionContext(ctx);
+  return res;
 }
 
+let mock: UpstreamMock;
+
 beforeEach(async () => {
-  fetchMock.activate();
-  fetchMock.disableNetConnect();
+  vi.unstubAllGlobals();
+  mock = installUpstreamMock();
+  await reset(); // vpw 0.22 无 per-test 存储隔离，显式清空 KV/D1
   await ensureSchema();
 });
 
@@ -83,11 +96,11 @@ describe("GET /sub/:token — token 校验", () => {
 
 describe("GET /sub/:token — 聚合与降级", () => {
   it("多源合并，节点带源前缀（Clash UA → YAML）", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_A);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);
@@ -108,11 +121,11 @@ describe("GET /sub/:token — 聚合与降级", () => {
   });
 
   it("部分源失败 → 降级只含成功源，仍 200", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_A);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(500, "err");
@@ -130,11 +143,11 @@ describe("GET /sub/:token — 聚合与降级", () => {
   });
 
   it("全部源失败 → 502", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(500, "err");
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(500, "err");
@@ -144,18 +157,16 @@ describe("GET /sub/:token — 聚合与降级", () => {
   });
 
   it("last_used_at 被记录（waitUntil）", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_A);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);
     await seed();
-    await request(`/sub/${TOKEN}`);
-    // waitUntil 由 createExecutionContext 排队，等待其完成
-    await new Promise((r) => setTimeout(r, 100));
+    await request(`/sub/${TOKEN}`); // helper 已冲刷 waitUntil
     const t = await env.DB.prepare(
       "SELECT last_used_at FROM tokens WHERE id = 1",
     ).first<{ last_used_at: number }>();
@@ -165,11 +176,11 @@ describe("GET /sub/:token — 聚合与降级", () => {
 
 describe("GET /sub/:token — 格式自适应", () => {
   it("非 Clash UA → base64，内容可解析回节点", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_A);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);
@@ -188,11 +199,11 @@ describe("GET /sub/:token — 格式自适应", () => {
   });
 
   it("?format=base64 显式覆盖 Clash UA", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_A);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);
@@ -206,11 +217,11 @@ describe("GET /sub/:token — 格式自适应", () => {
   });
 
   it("?format=clash 显式覆盖普通 UA", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_A);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);

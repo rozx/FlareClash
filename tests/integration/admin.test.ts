@@ -1,7 +1,13 @@
-import { createExecutionContext, env, fetchMock } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import {
+  createExecutionContext,
+  env,
+  reset,
+  waitOnExecutionContext,
+} from "cloudflare:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../../src/index";
 import { ensureSchema } from "./schema";
+import { installUpstreamMock, type UpstreamMock } from "./mock-upstream";
 
 const UPSTREAM = [
   "ss://YWVzLTEyOC1nY206cGFzc3dvcmQ=@a1.example.com:8388#香港01",
@@ -13,19 +19,23 @@ const UPSTREAM_B = "trojan://pw@b1.example.com:443#台湾01";
 let cookie = "";
 
 async function login() {
+  const ctx = createExecutionContext();
   const r = await app.request(
     "/api/login",
     { method: "POST", body: JSON.stringify({ password: "test-admin-pass" }) },
     env,
-    createExecutionContext(),
+    ctx,
   );
+  await waitOnExecutionContext(ctx);
   const setCookie = r.headers.get("Set-Cookie") ?? "";
   cookie = setCookie.split(";")[0]!;
   return r;
 }
 
-function req(path: string, init: RequestInit = {}) {
-  return app.request(
+/** 请求并冲刷 waitUntil（确保异步写完成，避免与 reset() 竞态） */
+async function req(path: string, init: RequestInit = {}) {
+  const ctx = createExecutionContext();
+  const r = await app.request(
     path,
     {
       ...init,
@@ -37,13 +47,18 @@ function req(path: string, init: RequestInit = {}) {
       body: init.body,
     },
     env,
-    createExecutionContext(),
+    ctx,
   );
+  await waitOnExecutionContext(ctx);
+  return r;
 }
 
+let mock: UpstreamMock;
+
 beforeEach(async () => {
-  fetchMock.activate();
-  fetchMock.disableNetConnect();
+  vi.unstubAllGlobals();
+  mock = installUpstreamMock();
+  await reset(); // vpw 0.22 无 per-test 存储隔离，显式清空 KV/D1
   await ensureSchema();
   await login();
 });
@@ -92,7 +107,7 @@ describe("管理员认证", () => {
 
 describe("源订阅管理", () => {
   it("创建源并立即探测：返回格式与节点数", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
@@ -118,7 +133,7 @@ describe("源订阅管理", () => {
   });
 
   it("探测失败：源仍创建但状态为 error 且给出原因", async () => {
-    fetchMock
+    mock
       .get("https://bad.example.com")
       .intercept({ path: "/" })
       .reply(500, "err");
@@ -196,7 +211,7 @@ describe("源订阅管理", () => {
   });
 
   it("改 URL 清除缓存与健康状态", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
@@ -224,7 +239,7 @@ describe("源订阅管理", () => {
   });
 
   it("删除源：记录、绑定、缓存全部清除", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
@@ -254,7 +269,7 @@ describe("源订阅管理", () => {
   });
 
   it("手动探测复用节流：间隔内不二次回源", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
@@ -270,13 +285,13 @@ describe("源订阅管理", () => {
     const p1 = (await r1.json()) as { probe: { ok: boolean; origin: string } };
     // 创建时已探测并写缓存，间隔内手动探测走缓存（节流生效）
     expect(p1.probe.origin).toBe("cache");
-    fetchMock.assertNoPendingInterceptors(); // 未发生第二次回源
+    mock.assertNoPendingInterceptors(); // 未发生第二次回源
   });
 });
 
 describe("Token 生命周期管理", () => {
   async function createSourceB() {
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);
@@ -287,7 +302,7 @@ describe("Token 生命周期管理", () => {
   }
 
   it("创建 token：43 字符随机值 + 绑定源 + 可访问订阅", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
@@ -306,18 +321,20 @@ describe("Token 生命周期管理", () => {
     expect(body.token.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(body.token.enabled).toBe(1);
 
-    // 订阅可访问
+    // 订阅可访问（冲刷 waitUntil）
+    const subCtx = createExecutionContext();
     const sub = await app.request(
       `/sub/${body.token.token}`,
       { headers: { "User-Agent": "clash" } },
       env,
-      createExecutionContext(),
+      subCtx,
     );
+    await waitOnExecutionContext(subCtx);
     expect(sub.status).toBe(200);
   });
 
   it("禁用 token 立即生效（403）", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
@@ -336,21 +353,23 @@ describe("Token 生命周期管理", () => {
       method: "PATCH",
       body: JSON.stringify({ enabled: false }),
     });
+    const subCtx = createExecutionContext();
     const sub = await app.request(
       `/sub/${created.token.token}`,
       {},
       env,
-      createExecutionContext(),
+      subCtx,
     );
+    await waitOnExecutionContext(subCtx);
     expect(sub.status).toBe(403);
   });
 
   it("修改源绑定：下次请求即返回新集合", async () => {
-    fetchMock
+    mock
       .get("https://a.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM);
-    fetchMock
+    mock
       .get("https://b.example.com")
       .intercept({ path: "/sub" })
       .reply(200, UPSTREAM_B);
@@ -371,12 +390,14 @@ describe("Token 生命周期管理", () => {
       method: "PATCH",
       body: JSON.stringify({ sourceIds: [2] }),
     });
+    const subCtx = createExecutionContext();
     const sub = await app.request(
       `/sub/${created.token.token}`,
       { headers: { "User-Agent": "clash" } },
       env,
-      createExecutionContext(),
+      subCtx,
     );
+    await waitOnExecutionContext(subCtx);
     expect(sub.status).toBe(200);
     const { parse: parseYaml } = await import("yaml");
     const cfg = parseYaml(await sub.text()) as { proxies: { name: string }[] };
