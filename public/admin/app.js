@@ -421,14 +421,28 @@ function tokenStatusCell(t) {
 }
 
 function tokenRowActions(t, sources) {
+  const adaptiveUrl = `${location.origin}/sub/${t.token}`;
+  const clashUrl = `${location.origin}/sub/clash/${t.token}`;
+  const base64Url = `${location.origin}/sub/base64/${t.token}`;
   return el(
     "td",
     { style: "white-space:nowrap" },
     el("button", {
       class: "small",
-      text: "复制订阅 URL",
-      onclick: () =>
-        copyText(`${location.origin}/sub/${t.token}`, "订阅 URL 已复制"),
+      text: "复制 Clash URL",
+      onclick: () => copyText(clashUrl, "Clash URL 已复制"),
+    }),
+    " ",
+    el("button", {
+      class: "small",
+      text: "复制 Base64 URL",
+      onclick: () => copyText(base64Url, "Base64 URL 已复制"),
+    }),
+    " ",
+    el("button", {
+      class: "small",
+      text: "自动识别 URL",
+      onclick: () => copyText(adaptiveUrl, "自动识别 URL 已复制"),
     }),
     " ",
     el("button", {
@@ -632,16 +646,35 @@ function tokenDialog(t, sources) {
               method: "POST",
               body: JSON.stringify(payload),
             });
-            // 规格：创建 token 并复制订阅地址
-            const url = `${location.origin}/sub/${token.token}`;
+            // 创建成功后给出确定性格式 URL，避免依赖客户端 User-Agent
+            const adaptiveUrl = `${location.origin}/sub/${token.token}`;
+            const clashUrl = `${location.origin}/sub/clash/${token.token}`;
+            const base64Url = `${location.origin}/sub/base64/${token.token}`;
             successOut.replaceChildren(
-              el("div", { text: "✓ 创建成功！订阅 URL：" }),
-              el("div", { class: "mono", text: url }),
+              el("div", { text: "✓ 创建成功！按客户端复制对应地址：" }),
+              el("br"),
+              el("div", { text: "Clash / Mihomo（YAML）" }),
+              el("div", { class: "mono", text: clashUrl }),
+              el("button", {
+                type: "button",
+                text: "复制 Clash URL",
+                onclick: () => copyText(clashUrl),
+              }),
+              el("br"),
+              el("br"),
+              el("div", { text: "Hiddify / 通用（Base64 链接）" }),
+              el("div", { class: "mono", text: base64Url }),
+              el("button", {
+                type: "button",
+                text: "复制 Base64 URL",
+                onclick: () => copyText(base64Url),
+              }),
+              el("br"),
               el("br"),
               el("button", {
                 type: "button",
-                text: "复制订阅 URL",
-                onclick: () => copyText(url),
+                text: "复制自动识别 URL",
+                onclick: () => copyText(adaptiveUrl),
               }),
             );
             successOut.style.display = "block";

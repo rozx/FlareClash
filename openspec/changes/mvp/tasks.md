@@ -29,7 +29,7 @@
 ## 5. 订阅端点
 
 - [x] 5.1 实现 GET /sub/:token 完整管道：D1 校验（存在/启用/未过期/有绑定源）→ 各源并行取缓存或回源 → 聚合 → last_used_at 异步更新（waitUntil）。验证：集成测试（miniflare/mock D1+KV）覆盖规格 subscription-serving 全部场景：有效 token、不存在(401)、禁用/过期(403)、未绑定源(400)、部分源失败降级
-- [x] 5.2 实现 UA 自适应输出与 ?format= 覆盖（clash/mihomo UA → YAML；其他 → base64）。验证：集成测试覆盖 UA 判定与显式参数覆盖两个场景，Content-Type 断言
+- [x] 5.2 实现 UA 自适应输出、?format= 覆盖与确定性格式路径（/sub/clash/:token → YAML，/sub/base64/:token → base64）。验证：集成测试覆盖 UA、查询参数、路径优先级与 Content-Type
 
 ## 6. 管理 API 与认证
 
@@ -42,12 +42,12 @@
 
 - [x] 7.1 实现登录页与认证状态管理（401 统一引导回登录）。验证：手动验证规格 admin-ui「登录界面」三场景
 - [x] 7.2 实现源管理页：列表（名称/格式/健康/绑定数）、新建（含探测结果展示）、编辑、删除二次确认。验证：手动对照规格「源管理界面」场景
-- [x] 7.3 实现 token 管理页：列表（名称/状态/绑定/最后使用）、创建（勾选源 + 过期时间）、复制订阅 URL、禁用/启用、删除二次确认、修改绑定。验证：手动对照规格「Token 管理界面」场景
+- [x] 7.3 实现 token 管理页：列表（名称/状态/绑定/最后使用）、创建（勾选源 + 过期时间）、分别复制 Clash/Base64/自动识别 URL、禁用/启用、删除二次确认、修改绑定。验证：手动对照规格「Token 管理界面」场景
 
 ## 8. 部署与验收
 
 - [x] 8.1 部署脚本与文档：README 补充 D1/KV 创建、secrets 写入（ADMIN_PASSWORD/AUTH_SECRET）、migrations、deploy 完整步骤。验证：按文档从零走通部署
 - [x] 8.2 端到端验收：部署后用真实 Clash 客户端 UA 与 curl 分别访问订阅 URL，验证两种格式输出；用管理页完成 源创建→探测→token 创建→绑定→订阅访问→禁用→访问被拒 全链路。验证：全链路通过并记录于本任务
   - 本地全链路（wrangler dev + 本地 mock 上游）2026-08-26 通过：登录✓ 源创建+探测（clash/base64 双格式）✓ token 创建+双源绑定✓ Clash UA→YAML（节点带前缀、地区分组、规则集）✓ 其他 UA→base64✓ 禁用→403✓ last_used_at 记录✓；期间修复两个仅真实 runtime 暴露的 bug（fetch 解构 Illegal invocation、D1 batch 中 last_insert_rowid 不可靠）
-  - 生产验收（https://<your-worker>.workers.dev）2026-08-26 通过：部署（wrangler 4.126）✓ 远端 migration✓ /admin/ 静态资产✓ 未认证 /api/* 401✓ 不存在 token 401✓ 公网 mock 源（paste.rs）真实回源探测✓ Clash UA→YAML（3 策略组+7 规则）✓ base64 UA→链接列表✓ KV 缓存命中（last_fetch_at 不变验证）+ KV 键写入（--remote 查询验证）✓ last_used_at✓ 禁用→立即 403✓ 验收后清理全部测试数据✓
+  - 生产验收（<https://<your-worker>.workers.dev）2026-08-26> 通过：部署（wrangler 4.126）✓ 远端 migration✓ /admin/ 静态资产✓ 未认证 /api/* 401✓ 不存在 token 401✓ 公网 mock 源（paste.rs）真实回源探测✓ Clash UA→YAML（3 策略组+7 规则）✓ base64 UA→链接列表✓ KV 缓存命中（last_fetch_at 不变验证）+ KV 键写入（--remote 查询验证）✓ last_used_at✓ 禁用→立即 403✓ 验收后清理全部测试数据✓
   - 剩余可选：用户用真实机场订阅在浏览器 UI（/admin/）做最终使用体验确认

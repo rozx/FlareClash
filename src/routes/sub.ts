@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { fetchSourceContent, type FetcherDeps } from "../cache/fetcher";
 import { aggregate } from "../lib/aggregate";
 import { buildClashConfig } from "../lib/clash-render";
@@ -43,9 +43,16 @@ function decideFormat(
   return /clash|mihomo|stash/i.test(userAgent) ? "clash" : "base64";
 }
 
-/** GET /sub/:token — 订阅端点（规格 subscription-serving 全部需求） */
-sub.get("/:token", async (c) => {
-  const token = c.req.param("token");
+type Format = "clash" | "base64";
+
+type SubContext = Context<{ Bindings: Env }>;
+
+/** 订阅核心管道：校验 → 并行取源 → 聚合 → 按格式输出。 */
+async function serveSubscription(
+  c: SubContext,
+  token: string,
+  forced: Format | undefined,
+): Promise<Response> {
   const data = await getSourcesForToken(c.env.DB, token);
   if (!data) {
     return c.json({ error: "invalid token" }, 401);
@@ -91,10 +98,9 @@ sub.get("/:token", async (c) => {
   // 记录最后使用时间（不阻塞响应）
   waitUntil(touchTokenUsed(c.env.DB, t.id));
 
-  const format = decideFormat(
-    c.req.query("format"),
-    c.req.header("User-Agent") ?? "",
-  );
+  const format: Format =
+    forced ??
+    decideFormat(c.req.query("format"), c.req.header("User-Agent") ?? "");
   if (format === "clash") {
     return c.body(buildClashConfig(proxies), 200, {
       "Content-Type": "text/yaml; charset=utf-8",
@@ -110,6 +116,21 @@ sub.get("/:token", async (c) => {
     "Content-Type": "text/plain; charset=utf-8",
     "Cache-Control": "no-store",
   });
-});
+}
+
+/** GET /sub/clash/:token — 显式 Clash YAML（路径即格式，不同客户端分发不同链接） */
+sub.get("/clash/:token", (c) =>
+  serveSubscription(c, c.req.param("token"), "clash"),
+);
+
+/** GET /sub/base64/:token — 显式 base64 分享链接列表 */
+sub.get("/base64/:token", (c) =>
+  serveSubscription(c, c.req.param("token"), "base64"),
+);
+
+/** GET /sub/:token — UA 自适应（?format= 可覆盖），规格 subscription-serving */
+sub.get("/:token", (c) =>
+  serveSubscription(c, c.req.param("token"), undefined),
+);
 
 export default sub;

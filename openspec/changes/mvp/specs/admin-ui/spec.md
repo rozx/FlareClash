@@ -53,15 +53,15 @@
 后台 MUST 提供 access token 管理界面。
 
 - MUST 支持创建 token：填写备注名、可选过期时间、勾选绑定的源
-- MUST 支持复制完整订阅 URL（`/sub/:token` 的绝对地址）到剪贴板
+- MUST 支持分别复制 Clash URL（`/sub/clash/:token`）、Base64 URL（`/sub/base64/:token`）与自动识别 URL（`/sub/:token`）到剪贴板
 - MUST 支持禁用/启用、删除 token（删除需二次确认）
 - MUST 支持修改已存在 token 的源绑定
 - token 列表 MUST 展示：名称、状态（启用/禁用/过期）、绑定源、最后使用时间
 
 #### Scenario: 创建 token 并复制订阅地址
 
-- **WHEN** 管理员创建 token 成功后点击复制
-- **THEN** 完整订阅 URL 进入剪贴板，可直接发给朋友
+- **WHEN** 管理员创建 token 成功后选择客户端格式并点击复制
+- **THEN** 对应格式的完整订阅 URL 进入剪贴板，可直接发给 Clash/Mihomo 或 Hiddify 等客户端
 
 #### Scenario: 查看最后使用时间
 

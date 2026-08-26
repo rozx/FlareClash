@@ -65,7 +65,11 @@ npx wrangler deploy
 部署完成后：
 
 - 管理后台：`https://<your-worker>.workers.dev/admin/`
-- 订阅地址：`https://<your-worker>.workers.dev/sub/<token>`（在后台创建 token 后复制）
+- Clash / Mihomo（确定性 YAML）：`https://<your-worker>.workers.dev/sub/clash/<token>`
+- Hiddify / 通用（确定性 Base64）：`https://<your-worker>.workers.dev/sub/base64/<token>`
+- 自动识别（按 UA，浏览器访问通常为 Base64）：`https://<your-worker>.workers.dev/sub/<token>`
+
+管理后台创建 token 后可分别复制这三种完整 URL。路径格式优先于 `?format=` 与 User-Agent。
 
 ### 本地开发
 
@@ -88,7 +92,7 @@ npm run typecheck
 1. 打开 `/admin/`，用 `ADMIN_PASSWORD` 登录
 2. 「源管理」→ 新建源：填机场订阅 URL，自动探测格式与节点数
 3. 「Token 管理」→ 新建 token：备注名（如「老王」）、可选过期时间、勾选可见的源
-4. 复制订阅 URL 发给朋友，客户端直接导入
+4. 按客户端复制对应地址：Clash/Mihomo 使用 `/sub/clash/<token>`，Hiddify 等使用 `/sub/base64/<token>`
 5. 不想给了？禁用或删除 token，立即生效
 
 ## 免费额度说明

@@ -65,6 +65,7 @@
 - UA 属于 Clash 系（含 `clash`、`mihomo` 等标识）时，MUST 返回完整 Clash YAML：含全部合并节点、默认策略组（自动选择 + 按节点名正则匹配的地区分组）与默认规则集
 - 其他 UA MUST 返回 base64 编码的分享链接列表（每行一条 `vmess://`/`ss://`/`trojan://`/`hysteria2://` 链接后整体 base64）
 - 请求可通过查询参数（如 `?format=clash` 或 `?format=base64`）显式指定格式，显式指定优先于 UA 判断
+- 系统 MUST 提供路径即格式的确定性端点：`/sub/clash/:token` 强制返回 Clash YAML，`/sub/base64/:token` 强制返回 base64；路径格式优先于查询参数与 UA
 
 #### Scenario: Clash 客户端请求
 
@@ -80,6 +81,16 @@
 
 - **WHEN** 请求带 `?format=base64` 但 UA 为 Clash
 - **THEN** 返回 base64 格式
+
+#### Scenario: Clash 格式路径
+
+- **WHEN** 任意 UA 请求 `/sub/clash/:token`
+- **THEN** 返回 Clash YAML，即使查询参数要求 base64
+
+#### Scenario: Base64 格式路径
+
+- **WHEN** 任意 UA 请求 `/sub/base64/:token`
+- **THEN** 返回 base64 编码的分享链接列表，即使 UA 为 Clash
 
 ### Requirement: 上游内容缓存与回源节流
 

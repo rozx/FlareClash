@@ -232,3 +232,54 @@ describe("GET /sub/:token — 格式自适应", () => {
     expect(r.headers.get("Content-Type")).toContain("text/yaml");
   });
 });
+
+describe("GET /sub/:format/:token — 显式格式路径", () => {
+  beforeEach(async () => {
+    mock
+      .get("https://a.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_A);
+    mock
+      .get("https://b.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_B);
+    await seed();
+  });
+
+  it("/sub/clash/:token 浏览器 UA 也返回 YAML", async () => {
+    const r = await request(`/sub/clash/${TOKEN}`, {
+      "User-Agent": "Mozilla/5.0 (Macintosh) Chrome/120",
+    });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Type")).toContain("text/yaml");
+    const text = await r.text();
+    expect(text).toContain("proxies:");
+  });
+
+  it("/sub/base64/:token Clash UA 也返回 base64", async () => {
+    const r = await request(`/sub/base64/${TOKEN}`, {
+      "User-Agent": "clash-verge/v1.7.7",
+    });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Type")).toContain("text/plain");
+    const text = await r.text();
+    expect(() => atob(text)).not.toThrow();
+  });
+
+  it("?format= 不覆盖显式路径（路径优先）", async () => {
+    const r = await request(`/sub/clash/${TOKEN}?format=base64`, {
+      "User-Agent": "curl/8.0",
+    });
+    expect(r.headers.get("Content-Type")).toContain("text/yaml");
+  });
+
+  it("显式路径同样校验 token（401/403）", async () => {
+    const r1 = await request(`/sub/clash/no-such-token`);
+    expect(r1.status).toBe(401);
+    await env.DB.prepare("UPDATE tokens SET enabled = 0 WHERE token = ?")
+      .bind(TOKEN)
+      .run();
+    const r2 = await request(`/sub/base64/${TOKEN}`);
+    expect(r2.status).toBe(403);
+  });
+});
