@@ -304,3 +304,69 @@ describe("GET /sub/:format/:token — 显式格式路径", () => {
     expect(r2.status).toBe(403);
   });
 });
+
+describe("订阅用量元数据响应头", () => {
+  const metaA = {
+    "subscription-userinfo":
+      "upload=100; download=200; total=1000; expire=2000000000",
+    "profile-update-interval": "24",
+  };
+  const metaB = {
+    "subscription-userinfo":
+      "upload=10; download=20; total=500; expire=1900000000",
+    "profile-update-interval": "12",
+  };
+
+  it("多源聚合并在缓存命中及两种格式中保留响应头", async () => {
+    mock
+      .get("https://a.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_A, metaA);
+    mock
+      .get("https://b.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_B, metaB);
+    await seed();
+
+    const first = await request(`/sub/${TOKEN}`, {
+      "User-Agent": "HiddifyNext/2.5.7 (android) like ClashMeta v2ray sing-box",
+    });
+    expect(first.headers.get("subscription-userinfo")).toBe(
+      "upload=110; download=220; total=1500; expire=1900000000",
+    );
+    expect(first.headers.get("profile-update-interval")).toBe("12");
+    expect(mock.calls).toHaveLength(2);
+
+    const cachedClash = await request(`/sub/clash/${TOKEN}`);
+    expect(cachedClash.headers.get("subscription-userinfo")).toBe(
+      "upload=110; download=220; total=1500; expire=1900000000",
+    );
+    expect(cachedClash.headers.get("profile-update-interval")).toBe("12");
+    expect(mock.calls).toHaveLength(2);
+  });
+
+  it("畸形源元数据被忽略，节点内容仍参与聚合", async () => {
+    mock
+      .get("https://a.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_A, {
+        "subscription-userinfo": "upload=-1; download=oops; total=1000",
+        "profile-update-interval": "invalid",
+      });
+    mock
+      .get("https://b.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_B, metaB);
+    await seed();
+
+    const r = await request(`/sub/${TOKEN}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("subscription-userinfo")).toBe(
+      "upload=10; download=20; total=500; expire=1900000000",
+    );
+    expect(r.headers.get("profile-update-interval")).toBe("12");
+    const decoded = atob(await r.text());
+    expect(decoded).toContain("a1.example.com");
+    expect(decoded).toContain("b1.example.com");
+  });
+});

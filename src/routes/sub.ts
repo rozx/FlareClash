@@ -4,6 +4,10 @@ import { aggregate } from "../lib/aggregate";
 import { buildClashConfig } from "../lib/clash-render";
 import { renderBase64Sub } from "../lib/base64-render";
 import { detectFormat } from "../lib/detect";
+import {
+  aggregateSubscriptionMetadata,
+  renderSubscriptionMetadataHeaders,
+} from "../lib/subscription-meta";
 import { numVar, type Env } from "../env";
 import {
   getSourcesForToken,
@@ -85,7 +89,12 @@ async function serveSubscription(
       if (!("content" in outcome)) return null;
       const detect = detectFormat(outcome.content);
       if ("error" in detect) return null;
-      return { name: src.name, prefix: src.prefix, proxies: detect.proxies };
+      return {
+        name: src.name,
+        prefix: src.prefix,
+        proxies: detect.proxies,
+        metadata: outcome.metadata,
+      };
     }),
   );
   const okSources = perSource.filter(
@@ -97,6 +106,9 @@ async function serveSubscription(
   }
 
   const { proxies } = aggregate(okSources);
+  const metadataHeaders = renderSubscriptionMetadataHeaders(
+    aggregateSubscriptionMetadata(okSources.map((s) => s.metadata)),
+  );
 
   // 记录最后使用时间（不阻塞响应）
   waitUntil(touchTokenUsed(c.env.DB, t.id));
@@ -108,6 +120,7 @@ async function serveSubscription(
     return c.body(buildClashConfig(proxies), 200, {
       "Content-Type": "text/yaml; charset=utf-8",
       "Cache-Control": "no-store",
+      ...metadataHeaders,
     });
   }
 
@@ -118,6 +131,7 @@ async function serveSubscription(
   return c.body(rendered.content, 200, {
     "Content-Type": "text/plain; charset=utf-8",
     "Cache-Control": "no-store",
+    ...metadataHeaders,
   });
 }
 

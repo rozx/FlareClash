@@ -1,3 +1,9 @@
+import {
+  formatExpire,
+  formatInterval,
+  formatUsage,
+} from "./format.js";
+
 /**
  * FlareClash 管理后台 SPA（无构建，原生 ES module，纯 DOM 构造，无 innerHTML）
  * 规格 admin-ui：登录 / 源管理 / token 管理
@@ -235,9 +241,17 @@ async function renderSourcesPage(page) {
       el(
         "tr",
         {},
-        ...["名称", "格式", "节点前缀", "健康状态", "绑定 token", "操作"].map(
-          (h) => el("th", { text: h }),
-        ),
+        ...[
+          "名称",
+          "格式",
+          "节点前缀",
+          "健康状态",
+          "用量（已用 / 总量）",
+          "到期",
+          "更新间隔",
+          "绑定 token",
+          "操作",
+        ].map((h) => el("th", { text: h })),
       ),
     ),
     el(
@@ -251,6 +265,12 @@ async function renderSourcesPage(page) {
           el("td", {}, s.format ? badge(s.format, "muted") : "—"),
           el("td", { text: s.prefix ?? "（源名）" }),
           sourceHealthCell(s),
+          el("td", {
+            class: "mono",
+            text: formatUsage(s.subscription_meta),
+          }),
+          el("td", { text: formatExpire(s.subscription_meta) }),
+          el("td", { text: formatInterval(s.subscription_meta) }),
           el("td", { text: String(s.token_count) }),
           sourceRowActions(s),
         ),
@@ -275,7 +295,7 @@ async function renderSourcesPage(page) {
             class: "empty",
             text: "还没有源订阅，点击「新建源」开始",
           })
-        : table,
+        : el("div", { class: "table-scroll" }, table),
     ),
   );
 }

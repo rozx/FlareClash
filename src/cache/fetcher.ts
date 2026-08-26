@@ -1,5 +1,9 @@
 import { detectFormat } from "../lib/detect";
 import {
+  parseSubscriptionMetadata,
+  type SubscriptionMetadata,
+} from "../lib/subscription-meta";
+import {
   type KVLike,
   readSourceCache,
   touchFetchedAt,
@@ -30,13 +34,31 @@ export interface FetcherDeps {
 
 export type FetchOutcome =
   /** 缓存新鲜（未过 TTL） */
-  | { status: "cache"; content: string; ageMs: number }
+  | {
+      status: "cache";
+      content: string;
+      metadata: SubscriptionMetadata | null;
+      ageMs: number;
+    }
   /** 缓存过期但节流命中：返回旧内容，不回源 */
-  | { status: "stale-cache"; content: string; ageMs: number }
+  | {
+      status: "stale-cache";
+      content: string;
+      metadata: SubscriptionMetadata | null;
+      ageMs: number;
+    }
   /** 回源成功并已写入缓存 */
-  | { status: "fetched"; content: string }
+  | {
+      status: "fetched";
+      content: string;
+      metadata: SubscriptionMetadata | null;
+    }
   /** 回源失败但旧缓存可用（降级返回旧内容） */
-  | { status: "fetch-failed-stale"; content: string }
+  | {
+      status: "fetch-failed-stale";
+      content: string;
+      metadata: SubscriptionMetadata | null;
+    }
   /** 回源失败且无任何缓存（调用方应跳过该源） */
   | { status: "fetch-failed"; error: string };
 
@@ -44,7 +66,10 @@ export type FetchOutcome =
 async function fetchUpstream(
   deps: FetcherDeps,
   source: FetchSource,
-): Promise<{ content: string } | { error: string }> {
+): Promise<
+  | { content: string; metadata: SubscriptionMetadata | null }
+  | { error: string }
+> {
   let resp: Response;
   try {
     resp = await deps.fetchFn(source.url, {
@@ -63,7 +88,7 @@ async function fetchUpstream(
   if ("error" in detect) {
     return { error: `内容无法解析: ${detect.error}` };
   }
-  return { content };
+  return { content, metadata: parseSubscriptionMetadata(resp.headers) };
 }
 
 /**
@@ -82,25 +107,49 @@ export async function fetchSourceContent(
   if (cached) {
     const ageMs = now - cached.dataAt;
     if (ageMs < source.cacheTtl * 1000) {
-      return { status: "cache", content: cached.data, ageMs };
+      return {
+        status: "cache",
+        content: cached.data,
+        metadata: cached.metadata,
+        ageMs,
+      };
     }
     if (now - cached.fetchedAt < deps.minFetchIntervalSec * 1000) {
-      return { status: "stale-cache", content: cached.data, ageMs };
+      return {
+        status: "stale-cache",
+        content: cached.data,
+        metadata: cached.metadata,
+        ageMs,
+      };
     }
   }
 
   const result = await fetchUpstream(deps, source);
   if ("content" in result) {
-    await writeSourceCache(deps.kv, source.id, result.content, deps.now());
+    await writeSourceCache(
+      deps.kv,
+      source.id,
+      result.content,
+      deps.now(),
+      result.metadata,
+    );
     await deps.onStatus("ok");
-    return { status: "fetched", content: result.content };
+    return {
+      status: "fetched",
+      content: result.content,
+      metadata: result.metadata,
+    };
   }
 
   // 失败：推进节流时间戳 + 记录状态；旧缓存继续兜底
   await touchFetchedAt(deps.kv, source.id, deps.now());
   await deps.onStatus("error", result.error);
   if (cached) {
-    return { status: "fetch-failed-stale", content: cached.data };
+    return {
+      status: "fetch-failed-stale",
+      content: cached.data,
+      metadata: cached.metadata,
+    };
   }
   return { status: "fetch-failed", error: result.error };
 }

@@ -103,6 +103,9 @@ header.topbar nav a.active {
 }
 
 /* ── 表格 ─────────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+}
 table {
   width: 100%;
   border-collapse: collapse;

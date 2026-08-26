@@ -32,12 +32,13 @@ Hono 是 Cloudflare Workers 生态事实标准：路由/中间件/Typed Env 开�
 ```
 D1 (SQLite)                          KV
 ┌──────────────────────────┐        ┌────────────────────────────────────┐
-│ sources                  │        │ fc:src:<id>:data     上游原文      │
+│ sources                  │        │ fc:src:<id>:data     正文+元数据 envelope│
 │  id, name, url, prefix,  │        │ fc:src:<id>:dataAt   内容写入时间  │
 │  format, cache_ttl,      │        │ fc:src:<id>:fetched  尝试回源时间  │
 │  last_fetch_at,          │        └────────────────────────────────────┘
-│  last_fetch_status,      │        成功回源 = 3 写（data+dataAt+fetched），
-│  created_at              │        失败尝试 = 1 写（仅 fetched）。
+│  last_fetch_status,      │        data envelope 同时保存正文与订阅用量，
+│  created_at              │        读取时兼容旧纯文本；成功回源仍为 3 写，
+│                          │        失败尝试 = 1 写（仅 fetched）。
 │                          │        分离 dataAt 与 fetched：新鲜度看前者，
 │ tokens                   │        节流看后者，失败的尝试不会让旧数据
 │  id, token, name,        │        被误判为新鲜。
@@ -75,9 +76,14 @@ D1: SELECT token + JOIN sources        （1 次读，宽行）
   ▼
 D1: UPDATE token.last_used_at          （异步 ctx.waitUntil，不阻塞响应）
   ▼
+聚合响应元数据:
+  ├─ subscription-userinfo: 各有效源 upload/download/total 求和，expire 取最早正值
+  └─ profile-update-interval: 各有效源取最短正值；畸形/缺失元数据降级忽略
+  ▼
 输出: format 参数 > UA 判断
   ├─ Clash → YAML(proxies + 默认 proxy-groups + 默认 rules)
   └─ 其他  → Proxy[] → 分享链接 → 逐行 join → base64
+两种输出均附带相同的聚合订阅元数据响应头
 ```
 
 额度核算：默认 5 源、TTL 30 分钟 → 成功回源最多 48 次/天/源，每次 3 写 → 5 × 3 × 48 = 720 次/天；失败尝试每次仅 1 写且受节流限制（≤ 96 次/天/源）。参数在 wrangler.toml 中可调；MIN_FETCH_INTERVAL 同时是失败重试的额度安全阀（理论上限：源数 × 3 × 86400 / MIN_FETCH_INTERVAL，须 ≤ 1000）。

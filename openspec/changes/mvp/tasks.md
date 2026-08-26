@@ -30,6 +30,7 @@
 
 - [x] 5.1 实现 GET /sub/:token 完整管道：D1 校验（存在/启用/未过期/有绑定源）→ 各源并行取缓存或回源 → 聚合 → last_used_at 异步更新（waitUntil）。验证：集成测试（miniflare/mock D1+KV）覆盖规格 subscription-serving 全部场景：有效 token、不存在(401)、禁用/过期(403)、未绑定源(400)、部分源失败降级
 - [x] 5.2 实现 UA 自适应输出、Hiddify UA 优先 base64 兼容、?format= 覆盖与确定性格式路径（/sub/clash/:token → YAML，/sub/base64/:token → base64）。验证：集成测试覆盖真实 Hiddify UA、查询参数、路径优先级与 Content-Type；Hiddify 官方 core 验证 base64 可解析
+- [x] 5.3 采集、缓存并聚合上游 `subscription-userinfo` / `profile-update-interval`，在所有订阅格式响应中输出标准头；KV data envelope 兼容旧纯文本缓存且不增加写次数。验证：单元/集成测试覆盖单源、多源、缓存命中、畸形元数据与真实 Hiddify 响应头
 
 ## 6. 管理 API 与认证
 
@@ -43,6 +44,7 @@
 - [x] 7.1 实现登录页与认证状态管理（401 统一引导回登录）。验证：手动验证规格 admin-ui「登录界面」三场景
 - [x] 7.2 实现源管理页：列表（名称/格式/健康/绑定数）、新建（含探测结果展示）、编辑、删除二次确认。验证：手动对照规格「源管理界面」场景
 - [x] 7.3 实现 token 管理页：列表（名称/状态/绑定/最后使用）、创建（勾选源 + 过期时间）、分别复制 Clash/Base64/自动识别 URL、禁用/启用、删除二次确认、修改绑定。验证：手动对照规格「Token 管理界面」场景
+- [x] 7.4 在源管理列表展示缓存中的已用/总量、到期时间与建议更新间隔；源列表 API 只读 KV、不额外回源。验证：API 集成测试覆盖有/无元数据，SPA 格式化测试覆盖人类可读展示
 
 ## 8. 部署与验收
 

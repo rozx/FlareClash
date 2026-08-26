@@ -98,6 +98,37 @@
 - **WHEN** 任意 UA 请求 `/sub/base64/:token`
 - **THEN** 返回 base64 编码的分享链接列表，即使 UA 为 Clash
 
+### Requirement: 订阅用量元数据
+
+系统 SHALL 将上游订阅的流量限额与到期信息通过标准响应头传递给客户端。
+
+- 回源成功时 MUST 采集合法的 `subscription-userinfo`（`upload`、`download`、`total`、可选 `expire`）与正整数 `profile-update-interval`
+- 元数据 MUST 与对应内容一起缓存；缓存命中与节流使用旧内容时 MUST 同时使用同一版本的元数据
+- 多个成功源包含合法用量元数据时，`upload`、`download`、`total` MUST 分别求和，`expire` MUST 取最早的正值
+- 多个成功源包含更新间隔时，`profile-update-interval` MUST 取最短的正值
+- 缺失或畸形元数据 MUST 被忽略，不得导致订阅请求失败；全部源均无合法元数据时 MUST 不输出对应响应头
+- Clash YAML、base64 与 UA 自适应端点 MUST 使用相同的元数据响应头行为
+
+#### Scenario: 单源用量透传
+
+- **WHEN** 唯一成功源返回合法 `subscription-userinfo` 与 `profile-update-interval`
+- **THEN** 订阅响应包含语义等价的两个标准响应头，Hiddify 可显示总量、已用量、到期时间与更新间隔
+
+#### Scenario: 多源用量聚合
+
+- **WHEN** 两个成功源均返回合法用量元数据
+- **THEN** 响应中的流量数字为两源之和、到期时间为两源最早正值、更新间隔为两源最短正值
+
+#### Scenario: 缓存命中保留用量
+
+- **WHEN** 上游内容与元数据已缓存，后续请求命中缓存
+- **THEN** 不回源且响应仍包含缓存版本的用量元数据
+
+#### Scenario: 畸形用量元数据降级
+
+- **WHEN** 某成功源的用量响应头缺字段、含负数或非数字
+- **THEN** 该源节点仍参与聚合，但其畸形元数据被忽略
+
 ### Requirement: 上游内容缓存与回源节流
 
 系统 SHALL 缓存上游订阅内容并限制回源频率，保证 KV 每日写入次数不超过 1000（免费额度）。

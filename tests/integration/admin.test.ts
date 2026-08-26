@@ -203,11 +203,57 @@ describe("源订阅管理", () => {
         name: string;
         token_count: number;
         last_fetch_status: string | null;
+        subscription_meta: unknown;
       }[];
     };
     expect(body.sources).toHaveLength(1);
     expect(body.sources[0]!.token_count).toBe(1);
     expect(body.sources[0]!.last_fetch_status).toBeNull();
+    expect(body.sources[0]!.subscription_meta).toBeNull();
+  });
+
+  it("列表从 KV 缓存展示源用量，且不额外回源", async () => {
+    mock
+      .get("https://a.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM, {
+        "subscription-userinfo":
+          "upload=1024; download=2048; total=10737418240; expire=2000000000",
+        "profile-update-interval": "24",
+      });
+    await req("/api/sources", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "有用量源",
+        url: "https://a.example.com/sub",
+      }),
+    });
+    expect(mock.calls).toHaveLength(1);
+
+    const r = await req("/api/sources");
+    const body = (await r.json()) as {
+      sources: {
+        subscription_meta: {
+          userInfo: {
+            upload: number;
+            download: number;
+            total: number;
+            expire: number;
+          };
+          profileUpdateInterval: number;
+        };
+      }[];
+    };
+    expect(body.sources[0]!.subscription_meta).toEqual({
+      userInfo: {
+        upload: 1024,
+        download: 2048,
+        total: 10737418240,
+        expire: 2000000000,
+      },
+      profileUpdateInterval: 24,
+    });
+    expect(mock.calls).toHaveLength(1);
   });
 
   it("改 URL 清除缓存与健康状态", async () => {

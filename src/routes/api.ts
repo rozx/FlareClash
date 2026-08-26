@@ -7,7 +7,7 @@ import {
   verifySession,
 } from "../auth";
 import { probeSource, type FetcherDeps } from "../cache/fetcher";
-import { clearSourceCache } from "../cache/kv";
+import { clearSourceCache, readSourceCache } from "../cache/kv";
 import { numVar, type Env } from "../env";
 import {
   createSource,
@@ -107,7 +107,17 @@ async function probeAndRecord(env: Env, src: SourceRow) {
 }
 
 api.get("/sources", async (c) => {
-  return c.json({ sources: await listSources(c.env.DB) });
+  const sources = await listSources(c.env.DB);
+  const withMetadata = await Promise.all(
+    sources.map(async (source) => {
+      const cache = await readSourceCache(c.env.KV, source.id);
+      return {
+        ...source,
+        subscription_meta: cache?.metadata ?? null,
+      };
+    }),
+  );
+  return c.json({ sources: withMetadata });
 });
 
 api.post("/sources", async (c) => {

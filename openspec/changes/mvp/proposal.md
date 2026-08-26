@@ -13,7 +13,7 @@
 - 聚合管道：解析多种上游格式为统一节点表示，按源加前缀改名去重后合并
 - 按 User-Agent 自适应输出：Clash 客户端收到完整 Clash YAML（含默认策略组模板与地区分组），其他客户端收到 base64 分享链接列表
 - Access token 管理：创建/禁用/删除 token，可选过期时间，记录最后使用时间；token 与源为多对多关联（一个 token 可绑定多个源）
-- 源内容缓存：KV 缓存上游响应，带 TTL 与回源节流，保护免费额度
+- 源内容与订阅用量元数据缓存：KV 缓存上游正文及 `subscription-userinfo` / 更新间隔，带 TTL 与回源节流，保护免费额度
 - 管理后台 `/admin`：单管理员密码登录（环境变量），签名 cookie 会话，SPA 管理页面（源管理、token 管理、状态查看）
 
 ## Capabilities

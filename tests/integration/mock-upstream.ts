@@ -12,7 +12,11 @@ import { vi } from "vitest";
 export interface UpstreamMock {
   get(origin: string): {
     intercept(o: { path: string }): {
-      reply(status: number, body?: string): void;
+      reply(
+        status: number,
+        body?: string,
+        headers?: Record<string, string>,
+      ): void;
     };
   };
   /** 实际发生的上游请求 URL 列表 */
@@ -22,7 +26,10 @@ export interface UpstreamMock {
 }
 
 export function installUpstreamMock(): UpstreamMock {
-  const routes = new Map<string, { status: number; body: string }>();
+  const routes = new Map<
+    string,
+    { status: number; body: string; headers?: Record<string, string> }
+  >();
   const calls: string[] = [];
   vi.stubGlobal(
     "fetch",
@@ -35,7 +42,8 @@ export function installUpstreamMock(): UpstreamMock {
             : input.url;
       calls.push(url);
       const r = routes.get(url);
-      if (r) return new Response(r.body, { status: r.status });
+      if (r)
+        return new Response(r.body, { status: r.status, headers: r.headers });
       throw new Error(`unmocked fetch: ${url}`);
     },
   );
@@ -44,8 +52,8 @@ export function installUpstreamMock(): UpstreamMock {
       return {
         intercept({ path }) {
           return {
-            reply(status, body = "") {
-              routes.set(origin + path, { status, body });
+            reply(status, body = "", headers) {
+              routes.set(origin + path, { status, body, headers });
             },
           };
         },
