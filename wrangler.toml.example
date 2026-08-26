@@ -9,26 +9,29 @@ compatibility_date = "2025-06-01"
 directory = "./public"
 
 # ── D1：元数据存储 ──────────────────────────────────────────────
-# database_id 为占位符；部署前用 `wrangler d1 create flareclash`
-# 的输出替换（本地开发与测试不使用该 id）。
+# 部署前替换：
+#   npx wrangler d1 create flareclash
+# 输出中的 database_id 填到下方（binding 保持 DB 不变，对应 src/env.ts）
 [[d1_databases]]
 binding = "DB"
 database_name = "flareclash"
-database_id = "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6"
+database_id = "<your-d1-database-id>"
 migrations_dir = "migrations"
 
-# ── KV：上游订阅内容缓存（键 fc:src:<id>:data / :fetched）──────
-# id 为占位符；部署前用 `wrangler kv namespace create CACHE` 输出替换。
+# ── KV：上游订阅内容缓存（键 fc:src:<id>:data / :dataAt / :fetched）─
+# 部署前替换：
+#   npx wrangler kv namespace create CACHE
+# 输出中的 id 填到下方
 [[kv_namespaces]]
 binding = "KV"
-id = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+id = "<your-kv-namespace-id>"
 
 # ── 可调参数（额度安全阀）───────────────────────────────────────
 [vars]
 # 默认缓存有效期（秒）= 30 分钟
 CACHE_TTL_DEFAULT = "1800"
 # 最短回源间隔（秒）= 15 分钟。
-# KV 写上限 ≈ 源数 × 2 × 86400 / MIN_FETCH_INTERVAL，免费额度 1000 写/天。
+# KV 写上限 ≈ 源数 × 3 × 86400 / MIN_FETCH_INTERVAL，免费额度 1000 写/天。
 MIN_FETCH_INTERVAL = "900"
 # 回源请求超时（毫秒）
 FETCH_TIMEOUT_MS = "10000"

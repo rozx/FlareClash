@@ -32,6 +32,9 @@ npx wrangler d1 create flareclash
 
 # 4. 创建 KV 命名空间，记下输出的 id
 npx wrangler kv namespace create CACHE
+
+# 5. 从模板生成本地配置（wrangler.toml 不入库）
+cp wrangler.toml.example wrangler.toml
 ```
 
 把两个 id 填入 `wrangler.toml`（替换占位符）：
@@ -48,14 +51,14 @@ id = "<步骤 4 的 id>"                     # ← 替换
 ```
 
 ```bash
-# 5. 写入 secrets
+# 6. 写入 secrets
 npx wrangler secret put ADMIN_PASSWORD   # 管理员登录密码
 npx wrangler secret put AUTH_SECRET      # 会话签名密钥：openssl rand -hex 32
 
-# 6. 建表（D1 migrations）
+# 7. 建表（D1 migrations）
 npx wrangler d1 migrations apply flareclash --remote
 
-# 7. 部署
+# 8. 部署
 npx wrangler deploy
 ```
 
@@ -67,6 +70,7 @@ npx wrangler deploy
 ### 本地开发
 
 ```bash
+cp wrangler.toml.example wrangler.toml  # 本地 dev 只需要存在即可，id 可不填
 cp .dev.vars.example .dev.vars   # 填入 ADMIN_PASSWORD / AUTH_SECRET
 npx wrangler d1 migrations apply flareclash --local
 npm run dev                      # http://localhost:8787
