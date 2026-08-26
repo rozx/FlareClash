@@ -1,0 +1,2 @@
+ADMIN_PASSWORD=change-me
+AUTH_SECRET=openssl-rand-hex-32-输出填这里

@@ -1,0 +1,300 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --border: #2a2f3a;
+  --text: #e6e9ef;
+  --muted: #8b93a3;
+  --accent: #4d8dff;
+  --ok: #3ecf8e;
+  --warn: #f5a623;
+  --err: #ef5b6e;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    14px / 1.6 -apple-system,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+}
+
+#app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+/* ── 登录 ─────────────────────────────── */
+.login-wrap {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  width: 100%;
+  max-width: 360px;
+}
+.login-card h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+.login-card p {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ── 布局 ─────────────────────────────── */
+header.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+header.topbar .logo {
+  font-weight: 700;
+  font-size: 16px;
+}
+header.topbar nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+header.topbar nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+header.topbar nav a.active {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.card .actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+/* ── 表格 ─────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+tr:last-child td {
+  border-bottom: none;
+}
+td.wrap {
+  word-break: break-all;
+}
+
+.empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* ── 徽标 / 状态 ──────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.badge.ok {
+  background: rgba(62, 207, 142, 0.14);
+  color: var(--ok);
+}
+.badge.err {
+  background: rgba(239, 91, 110, 0.14);
+  color: var(--err);
+}
+.badge.muted {
+  background: rgba(139, 147, 163, 0.14);
+  color: var(--muted);
+}
+.badge.warn {
+  background: rgba(245, 166, 35, 0.14);
+  color: var(--warn);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* ── 表单 ─────────────────────────────── */
+label.field {
+  display: block;
+  margin-bottom: 12px;
+}
+label.field span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+input[type="text"],
+input[type="url"],
+input[type="password"],
+input[type="number"],
+input[type="datetime-local"] {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.checks label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+/* ── 按钮 ─────────────────────────────── */
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--accent);
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.danger:hover {
+  border-color: var(--err);
+  color: var(--err);
+}
+button.small {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* ── 对话框 ───────────────────────────── */
+dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  width: min(440px, calc(100vw - 32px));
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+dialog h3 {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+dialog .footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.form-error {
+  color: var(--err);
+  font-size: 12px;
+  min-height: 16px;
+  margin: 4px 0;
+}
+
+/* ── 探测结果 ─────────────────────────── */
+.probe-result {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.probe-result.ok {
+  background: rgba(62, 207, 142, 0.1);
+  color: var(--ok);
+}
+.probe-result.err {
+  background: rgba(239, 91, 110, 0.1);
+  color: var(--err);
+}
+
+/* ── toast ────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+#toast.show {
+  opacity: 1;
+}
