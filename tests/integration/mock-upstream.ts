@@ -37,7 +37,7 @@ export function installUpstreamMock(): UpstreamMock {
       const r = routes.get(url);
       if (r) return new Response(r.body, { status: r.status });
       throw new Error(`unmocked fetch: ${url}`);
-    }
+    },
   );
   return {
     get(origin) {
