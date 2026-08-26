@@ -118,7 +118,11 @@ export function aggregateSubscriptionMetadata(
   if (infos.length > 0) {
     const upload = safeSum(infos.map((i) => i.upload));
     const download = safeSum(infos.map((i) => i.download));
-    const total = safeSum(infos.map((i) => i.total));
+    // total=0 按业界惯例表示无限流量：任一源无限 → 聚合无限
+    // （多套餐中有一个不限量，用户可用的总额度就不再有限）。
+    const total = infos.some((i) => i.total === 0)
+      ? 0
+      : safeSum(infos.map((i) => i.total));
     if (upload !== null && download !== null && total !== null) {
       const expires = infos
         .map((i) => i.expire)

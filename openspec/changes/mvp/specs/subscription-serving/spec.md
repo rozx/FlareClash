@@ -104,7 +104,7 @@
 
 - 回源成功时 MUST 采集合法的 `subscription-userinfo`（`upload`、`download`、`total`、可选 `expire`）与正整数 `profile-update-interval`
 - 元数据 MUST 与对应内容一起缓存；缓存命中与节流使用旧内容时 MUST 同时使用同一版本的元数据
-- 多个成功源包含合法用量元数据时，`upload`、`download`、`total` MUST 分别求和，`expire` MUST 取最早的正值
+- 多个成功源包含合法用量元数据时，`upload`、`download` MUST 分别求和，`expire` MUST 取最早的正值；任一源 `total=0`（无限流量惯例）时聚合 `total` MUST 为 0
 - 多个成功源包含更新间隔时，`profile-update-interval` MUST 取最短的正值
 - 缺失或畸形元数据 MUST 被忽略，不得导致订阅请求失败；全部源均无合法元数据时 MUST 不输出对应响应头
 - Clash YAML、base64 与 UA 自适应端点 MUST 使用相同的元数据响应头行为

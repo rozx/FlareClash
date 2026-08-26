@@ -67,4 +67,16 @@ describe("订阅用量元数据", () => {
     expect(aggregateSubscriptionMetadata([null, undefined])).toBeNull();
     expect(renderSubscriptionMetadataHeaders(null)).toEqual({});
   });
+
+  it("任一源 total=0（无限流量）时聚合总量为无限", () => {
+    const meta = aggregateSubscriptionMetadata([
+      { userInfo: { upload: 100, download: 200, total: 0 } },
+      { userInfo: { upload: 10, download: 20, total: 500 } },
+    ]);
+    expect(meta?.userInfo).toEqual({ upload: 110, download: 220, total: 0 });
+    // render 时 total=0 不代表任何有限额度，直接输出 0（客户端按无限显示）
+    expect(renderSubscriptionMetadataHeaders(meta)).toEqual({
+      "subscription-userinfo": "upload=110; download=220; total=0",
+    });
+  });
 });
