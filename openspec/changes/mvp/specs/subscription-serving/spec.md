@@ -63,6 +63,7 @@
 系统 SHALL 根据请求的 User-Agent 返回不同格式。
 
 - UA 属于 Clash 系（含 `clash`、`mihomo` 等标识）时，MUST 返回完整 Clash YAML：含全部合并节点、默认策略组（自动选择 + 按节点名正则匹配的地区分组）与默认规则集
+- Hiddify UA MUST 优先返回单行 base64，即使其 UA 同时含 `ClashMeta`；这是为了规避 Hiddify 下载层逐行 trim 破坏 YAML 缩进的兼容性问题
 - 其他 UA MUST 返回 base64 编码的分享链接列表（每行一条 `vmess://`/`ss://`/`trojan://`/`hysteria2://` 链接后整体 base64）
 - 请求可通过查询参数（如 `?format=clash` 或 `?format=base64`）显式指定格式，显式指定优先于 UA 判断
 - 系统 MUST 提供路径即格式的确定性端点：`/sub/clash/:token` 强制返回 Clash YAML，`/sub/base64/:token` 强制返回 base64；路径格式优先于查询参数与 UA
@@ -76,6 +77,11 @@
 
 - **WHEN** UA 不含 Clash 系标识
 - **THEN** 响应为 base64 编码的分享链接列表
+
+#### Scenario: Hiddify UA 同时包含 ClashMeta
+
+- **WHEN** UA 形如 `HiddifyNext/... like ClashMeta v2ray sing-box`
+- **THEN** 响应仍为单行 base64，不返回会被客户端破坏缩进的 Clash YAML
 
 #### Scenario: 显式格式覆盖
 

@@ -67,9 +67,9 @@ npx wrangler deploy
 - 管理后台：`https://<your-worker>.workers.dev/admin/`
 - Clash / Mihomo（确定性 YAML）：`https://<your-worker>.workers.dev/sub/clash/<token>`
 - Hiddify / 通用（确定性 Base64）：`https://<your-worker>.workers.dev/sub/base64/<token>`
-- 自动识别（按 UA，浏览器访问通常为 Base64）：`https://<your-worker>.workers.dev/sub/<token>`
+- 自动识别（按 UA，浏览器与 Hiddify 返回 Base64）：`https://<your-worker>.workers.dev/sub/<token>`
 
-管理后台创建 token 后可分别复制这三种完整 URL。路径格式优先于 `?format=` 与 User-Agent。
+管理后台创建 token 后可分别复制这三种完整 URL。路径格式优先于 `?format=` 与 User-Agent。Hiddify 的 UA 同时含 `ClashMeta`，但自动端点会优先识别 `HiddifyNext` 并返回单行 Base64，避免其下载层破坏 Clash YAML 缩进。
 
 ### 本地开发
 

@@ -198,6 +198,28 @@ describe("GET /sub/:token — 格式自适应", () => {
     ]);
   });
 
+  it("Hiddify UA 含 ClashMeta 时优先返回单行 base64", async () => {
+    mock
+      .get("https://a.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_A);
+    mock
+      .get("https://b.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, UPSTREAM_B);
+    await seed();
+    const r = await request(`/sub/${TOKEN}`, {
+      "User-Agent":
+        "HiddifyNext/2.5.7 (android) like ClashMeta v2ray sing-box",
+    });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Type")).toContain("text/plain");
+    const text = await r.text();
+    expect(text).not.toContain("\n");
+    const decoded = atob(text);
+    expect(decoded).toContain("://");
+  });
+
   it("?format=base64 显式覆盖 Clash UA", async () => {
     mock
       .get("https://a.example.com")

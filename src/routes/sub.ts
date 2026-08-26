@@ -40,6 +40,9 @@ function decideFormat(
   const q = (queryFormat ?? "").toLowerCase();
   if (q === "clash" || q === "yaml") return "clash";
   if (q === "base64" || q === "b64" || q === "links") return "base64";
+  // Hiddify UA 含 "like ClashMeta"，但其下载层会 trim 每一行并破坏
+  // Clash YAML 缩进；必须先于 Clash 识别，改发单行 base64。
+  if (/hiddify/i.test(userAgent)) return "base64";
   return /clash|mihomo|stash/i.test(userAgent) ? "clash" : "base64";
 }
 

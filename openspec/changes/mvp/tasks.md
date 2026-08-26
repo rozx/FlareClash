@@ -29,7 +29,7 @@
 ## 5. 订阅端点
 
 - [x] 5.1 实现 GET /sub/:token 完整管道：D1 校验（存在/启用/未过期/有绑定源）→ 各源并行取缓存或回源 → 聚合 → last_used_at 异步更新（waitUntil）。验证：集成测试（miniflare/mock D1+KV）覆盖规格 subscription-serving 全部场景：有效 token、不存在(401)、禁用/过期(403)、未绑定源(400)、部分源失败降级
-- [x] 5.2 实现 UA 自适应输出、?format= 覆盖与确定性格式路径（/sub/clash/:token → YAML，/sub/base64/:token → base64）。验证：集成测试覆盖 UA、查询参数、路径优先级与 Content-Type
+- [x] 5.2 实现 UA 自适应输出、Hiddify UA 优先 base64 兼容、?format= 覆盖与确定性格式路径（/sub/clash/:token → YAML，/sub/base64/:token → base64）。验证：集成测试覆盖真实 Hiddify UA、查询参数、路径优先级与 Content-Type；Hiddify 官方 core 验证 base64 可解析
 
 ## 6. 管理 API 与认证
 
