@@ -63,7 +63,7 @@ tests/unit/         纯逻辑单测；tests/integration/ 走真实 D1/KV（vites
 
 ## 生产环境
 
-- Worker: `flareclash`（`https://<your-worker>.workers.dev`，自定义域 `<your-sub-domain>`）
+- Worker: `flareclash`（`https://<your-worker>.workers.dev`，可选自定义域）；资源 ID 与域名只存在于本地不入库的 `wrangler.toml`，不得写入仓库任何文件
 - D1: `flareclash`（region ENAM）；KV: `CACHE`
 - 部署顺序：改 `wrangler.toml`（本地不入库文件）→ deploy → 需要时 `db:migrate:remote` → 验证生产响应头/内容。
 - 生产验证涉及真实订阅 token 时，输出中不得打印 token 全量与订阅正文（打印结构化检查结果即可）。
