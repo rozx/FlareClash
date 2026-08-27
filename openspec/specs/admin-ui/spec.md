@@ -62,7 +62,7 @@
 后台 MUST 提供 access token 管理界面。
 
 - MUST 支持创建 token：填写备注名、可选过期时间、勾选绑定的源
-- MUST 支持分别复制 Clash URL（`/sub/clash/:token`）、Base64 URL（`/sub/base64/:token`）与自动识别 URL（`/sub/:token`）到剪贴板
+- MUST 支持分别复制 Clash URL（`/sub/clash/:token`）、Base64 URL（`/sub/base64/:token`）与自动识别 URL（`/sub/:token`）到剪贴板；复制入口在 token 详情弹窗（编辑）与创建成功输出中，列表行仅保留自动识别 URL 快捷复制
 - MUST 支持禁用/启用、删除 token（删除需二次确认）
 - MUST 支持修改已存在 token 的源绑定
 - token 列表 MUST 展示：名称、状态（启用/禁用/过期）、绑定源、最后使用时间

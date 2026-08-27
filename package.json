@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "dry-run": "wrangler deploy --dry-run",
+    "dev": "wrangler dev --define 'COMMIT_HASH:\"'$(git rev-parse --short HEAD)'\"'",
+    "deploy": "wrangler deploy --define 'COMMIT_HASH:\"'$(git rev-parse --short HEAD)'\"'",
+    "dry-run": "wrangler deploy --dry-run --define 'COMMIT_HASH:\"'$(git rev-parse --short HEAD)'\"'",
     "db:migrate": "wrangler d1 migrations apply flareclash --local",
     "db:migrate:remote": "wrangler d1 migrations apply flareclash --remote",
     "test": "vitest run",
