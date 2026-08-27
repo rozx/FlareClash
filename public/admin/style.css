@@ -278,10 +278,6 @@ dialog .footer {
   font-size: 13px;
   margin-bottom: 12px;
 }
-/* 成功输出里的长 URL 无断行机会，必须强制断行防溢出弹窗 */
-.url-group .mono {
-  word-break: break-all;
-}
 /* 地址卡片控件：头部（名称+复制按钮）+ 说明 + 完整值（成功输出与编辑弹窗共用） */
 .url-group {
   background: var(--panel-2);
@@ -305,14 +301,16 @@ dialog .footer {
   color: var(--muted);
   margin-top: 2px;
 }
-.url-group .mono {
-  margin-top: 6px;
-  color: var(--accent);
-}
-/* 卡片内文本框：撑满卡片、与卡片底色区分 */
+/* 卡片内只读文本框：撑满卡片、与卡片底色区分。
+   长 URL 防溢出机制：单行 input 不换行（word-break 无效），
+   值在框内横向滚动、click 即全选；宽度锁定 100%（配合全局
+   border-box 与 min-width:0），框本身不会撑破卡片/弹窗 */
 .url-group input.mono {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 6px;
+  color: var(--accent);
   background: var(--bg);
 }
 
@@ -324,7 +322,9 @@ dialog .footer {
   font-size: 12px;
   color: var(--muted);
 }
-.token-urls .url-group:first-of-type {
+/* 紧跟标题的首个卡片收窄上边距（容器第一个 div 是标题，
+   :first-of-type 匹配不到卡片，改用相邻兄弟选择器） */
+.token-urls-title + .url-group {
   margin-top: 6px;
 }
 .probe-result.ok {

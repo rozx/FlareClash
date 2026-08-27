@@ -29,7 +29,8 @@ import {
 
 const api = new Hono<{ Bindings: Env }>();
 
-// 部署时由 wrangler --define 注入 git commit hash（见 package.json deploy/dev 脚本）；
+// 部署时由 scripts/version.js 包装 wrangler --define 注入 git commit hash
+// （见 package.json deploy/dev/dry-run 脚本，无 .git 时注入 "dev"）；
 // 本地 vitest / 未注入时标识符不存在，typeof 守卫回退 "dev"
 declare const COMMIT_HASH: string | undefined;
 

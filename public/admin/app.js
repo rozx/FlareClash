@@ -21,7 +21,8 @@ function el(tag, attrs = {}, ...children) {
     else if (k === "text") n.textContent = v;
     else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
     else if (typeof v === "boolean")
-      n[k] = v; // checked/disabled/required 等布尔 DOM 属性
+      // 布尔 DOM 属性；驼峰属性（如 readOnly）需从小写名映射，否则只是无效 expando
+      n[k === "readonly" ? "readOnly" : k] = v;
     else n.setAttribute(k, String(v));
   }
   for (const c of children) {
@@ -486,6 +487,16 @@ function valueCard({ name, desc, value, toastMsg }) {
   );
 }
 
+/** Token 凭据卡片：valueCard 的 Token 专用封装（编辑弹窗与创建成功输出共用） */
+function credentialCard(value) {
+  return valueCard({
+    name: "Token",
+    desc: "订阅凭据，即地址中 /sub/ 之后的部分；泄露后任何人可凭它拉取订阅",
+    value,
+    toastMsg: "Token 已复制",
+  });
+}
+
 /** token 的三格式订阅地址卡片组（编辑弹窗与创建成功输出共用） */
 function subUrlCards(subBase, tokenStr) {
   return [
@@ -684,12 +695,7 @@ function tokenDialog(t, sources) {
         "div",
         { class: "token-urls" },
         el("div", { class: "token-urls-title", text: "凭据与订阅地址" }),
-        valueCard({
-          name: "Token",
-          desc: "订阅凭据，即地址中 /sub/ 之后的部分；泄露后任何人可凭它拉取订阅",
-          value: t.token,
-          toastMsg: "Token 已复制",
-        }),
+        credentialCard(t.token),
         ...subUrlCards(subBase, t.token),
       )
     : null;
@@ -745,12 +751,7 @@ function tokenDialog(t, sources) {
             // 创建成功后展示 token 与确定性格式 URL，避免依赖客户端 User-Agent
             successOut.replaceChildren(
               el("div", { text: "✓ 创建成功！复制对应地址发给使用者：" }),
-              valueCard({
-                name: "Token",
-                desc: "订阅凭据，即地址中 /sub/ 之后的部分；泄露后任何人可凭它拉取订阅",
-                value: token.token,
-                toastMsg: "Token 已复制",
-              }),
+              credentialCard(token.token),
               ...subUrlCards(`${location.origin}/sub`, token.token),
             );
             successOut.style.display = "block";
