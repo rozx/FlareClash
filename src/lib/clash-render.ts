@@ -1,5 +1,11 @@
 import { stringify as stringifyYaml } from "yaml";
 import type { Proxy } from "./types";
+import {
+  clashRules,
+  defaultRoutingConfig,
+  groupTag,
+  type RoutingConfig,
+} from "./routing";
 
 /** 地区分组：按节点名正则匹配（design.md：HK/TW/JP/SG/US/EU 起步） */
 const REGION_GROUPS: { name: string; re: RegExp }[] = [
@@ -34,7 +40,11 @@ interface ProxyGroup {
  * 其余节点 / 节点选择）+ 默认规则集（规格 subscription-serving
  * 「按客户端自适应输出」）。
  */
-export function buildClashConfig(proxies: Proxy[]): string {
+export function buildClashConfig(
+  proxies: Proxy[],
+  config: RoutingConfig = defaultRoutingConfig(),
+  sourceMembers: Map<number, string[]> = new Map(),
+): string {
   const names = proxies.map((p) => p.name);
 
   const groups: ProxyGroup[] = [];
@@ -77,6 +87,31 @@ export function buildClashConfig(proxies: Proxy[]): string {
     });
   }
 
+  const referenced = new Set([
+    config.final,
+    ...config.rules.map((r) => r.target),
+  ]);
+  const sourceGroupNames: string[] = [];
+  for (const group of config.groups) {
+    const members = [
+      ...new Set(group.sourceIds.flatMap((id) => sourceMembers.get(id) ?? [])),
+    ];
+    if (!members.length) {
+      if (referenced.has(group.id))
+        throw new Error(
+          "规则引用的策略组无可用节点，请管理员检查 token 绑定、源状态或重名去重",
+        );
+      continue;
+    }
+    const name = groupTag(group);
+    sourceGroupNames.push(name);
+    groups.push({
+      name,
+      type: group.mode,
+      proxies: members,
+      ...(group.mode === "url-test" ? { url: TEST_URL, interval: 300 } : {}),
+    });
+  }
   groups.push({
     name: SELECT_GROUP,
     type: "select",
@@ -84,19 +119,12 @@ export function buildClashConfig(proxies: Proxy[]): string {
       ...(names.length > 0 ? [AUTO_GROUP] : []),
       ...regionGroupNames,
       ...otherGroupNames,
+      ...sourceGroupNames,
       "DIRECT",
     ],
   });
 
-  const rules = [
-    "DOMAIN-SUFFIX,local,DIRECT",
-    "IP-CIDR,127.0.0.0/8,DIRECT,no-resolve",
-    "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve",
-    "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve",
-    "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
-    "GEOIP,CN,DIRECT",
-    `MATCH,${SELECT_GROUP}`,
-  ];
+  const rules = clashRules(config);
 
   return stringifyYaml(
     { proxies, "proxy-groups": groups, rules },

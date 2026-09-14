@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import routing from "./routing";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import {
   loginDelay,
@@ -374,5 +375,7 @@ api.delete("/tokens/:id", async (c) => {
   await deleteToken(c.env.DB, id);
   return c.json({ ok: true });
 });
+
+api.route("/routing", routing);
 
 export default api;

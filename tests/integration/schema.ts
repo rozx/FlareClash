@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 
 /**
- * 测试用 schema：与 migrations/（0001 + 0002）保持一致。
+ * 测试用 schema：与 migrations/（0001 + 0002 + 0003）保持一致。
  * 注意：D1 exec() 对语句内 `--` 注释解析有缺陷，此处必须无注释。
  * migrations 目录由 wrangler 管理（生产/本地 dev），
  * 集成测试通过 ensureSchema() 直接应用本文件。
@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS token_sources (
   PRIMARY KEY (token_id, source_id)
 );
 
+CREATE TABLE IF NOT EXISTS routing_config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  content TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);
 CREATE INDEX IF NOT EXISTS idx_sources_url ON sources(url);
 `;
@@ -50,7 +55,7 @@ export async function ensureSchema(): Promise<void> {
  await env.DB.batch(stmts.map((sql) => env.DB.prepare(sql)));
  await env.DB.batch(
   splitSqlStatements(
-   "DELETE FROM token_sources; DELETE FROM tokens; DELETE FROM sources;" +
+   "DELETE FROM routing_config; DELETE FROM token_sources; DELETE FROM tokens; DELETE FROM sources;" +
     " DELETE FROM sqlite_sequence WHERE name IN ('sources','tokens');",
   ).map((sql) => env.DB.prepare(sql)),
  );

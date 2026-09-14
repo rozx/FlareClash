@@ -11,7 +11,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply flareclash --remote",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tests/browser/tsconfig.json",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "hono": "^4.6.16",
@@ -20,6 +21,8 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260826.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.2",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11",
     "wrangler": "^4.126.0"

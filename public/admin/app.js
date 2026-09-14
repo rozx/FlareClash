@@ -1,4 +1,5 @@
 import { formatExpire, formatInterval, formatUsage } from "./format.js";
+import { renderRoutingPage } from "./routing.js";
 
 /**
  * FlareClash 管理后台 SPA（无构建，原生 ES module，纯 DOM 构造，无 innerHTML）
@@ -164,6 +165,11 @@ function renderMain() {
           text: "Token 管理",
           "data-route": "tokens",
         }),
+        el("a", {
+          href: "#/routing",
+          text: "分流设置",
+          "data-route": "routing",
+        }),
       ),
       el("button", {
         id: "logout-btn",
@@ -210,6 +216,8 @@ function route() {
     a.classList.toggle("active", a.dataset.route === r);
   }
   if (r === "tokens") renderTokensPage(page);
+  else if (r === "routing")
+    renderRoutingPage(page, { el, apiJson, field, toast });
   else renderSourcesPage(page);
 }
 

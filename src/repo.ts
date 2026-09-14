@@ -2,6 +2,44 @@
  * D1 数据访问层。INTEGER 时间列统一使用 epoch ms。
  */
 
+import {
+  defaultRoutingConfig,
+  parseRoutingConfig,
+  type RoutingConfig,
+} from "./lib/routing";
+
+export async function getRoutingConfig(
+  db: D1Database,
+): Promise<{ config: RoutingConfig; origin: "default" | "saved" }> {
+  const row = await db
+    .prepare("SELECT content FROM routing_config WHERE id = 1")
+    .first<{ content: string }>();
+  if (!row) return { config: defaultRoutingConfig(), origin: "default" };
+  // 损坏配置不能默默回退成其他路由策略。
+  try {
+    return {
+      config: parseRoutingConfig(JSON.parse(row.content)),
+      origin: "saved",
+    };
+  } catch {
+    throw new Error("已保存分流配置无效，请管理员恢复默认或重新保存");
+  }
+}
+export async function saveRoutingConfig(
+  db: D1Database,
+  config: RoutingConfig,
+): Promise<void> {
+  await db
+    .prepare(
+      "INSERT INTO routing_config (id, content) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET content = excluded.content",
+    )
+    .bind(JSON.stringify(config))
+    .run();
+}
+export async function resetRoutingConfig(db: D1Database): Promise<void> {
+  await db.prepare("DELETE FROM routing_config WHERE id = 1").run();
+}
+
 export interface TokenRow {
   id: number;
   token: string;

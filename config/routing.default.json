@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "groups": [],
+  "rules": [
+    { "type": "DOMAIN-SUFFIX", "value": "local", "target": "DIRECT" },
+    { "type": "IP-CIDR", "value": "127.0.0.0/8", "target": "DIRECT" },
+    { "type": "IP-CIDR", "value": "10.0.0.0/8", "target": "DIRECT" },
+    { "type": "IP-CIDR", "value": "172.16.0.0/12", "target": "DIRECT" },
+    { "type": "IP-CIDR", "value": "192.168.0.0/16", "target": "DIRECT" },
+    { "type": "GEOIP", "value": "CN", "target": "DIRECT" }
+  ],
+  "final": "PROXY"
+}

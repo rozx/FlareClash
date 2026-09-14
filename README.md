@@ -87,6 +87,8 @@ npm run dev                      # http://localhost:8787
 ```bash
 npm test          # 单测 + 集成测试（vitest workers 池，真实 D1/KV/miniflare）
 npm run typecheck
+npx playwright install chromium  # 首次安装浏览器测试依赖
+npm run test:browser              # 1024px / 390px，虚构 API 数据，不访问生产
 ```
 
 ## 使用流程
@@ -96,6 +98,27 @@ npm run typecheck
 3. 「Token 管理」→ 新建 token：备注名（如「老王」）、可选过期时间、勾选可见的源
 4. 按客户端复制对应地址：Clash/Mihomo 使用 `/sub/clash/<token>`，Hiddify 等使用 `/sub/base64/<token>`
 5. 不想给了？禁用或删除 token，立即生效
+
+## 网站分流设置
+
+进入后台「分流设置」：按源建立策略组、编辑有序规则，选择未命中时的兜底动作。Clash 客户端更新订阅后使用新配置；上游机场自带的规则仍不会被合并。
+
+- 默认配置在 [`config/routing.default.json`](config/routing.default.json)，可以直接手动编辑。文件打包到 Worker，修改后须重新部署。
+- 网站保存的是 D1 覆盖；恢复默认会删除覆盖，使用当前部署的默认 JSON。不会回写仓库，也不访问 KV。
+- JSON 导入和「应用 JSON 到表单」只修改草稿，需点击保存。导出配置 JSON 可用于本地备份和编辑。
+- 条件支持完整域名、域名后缀、关键词、IPv4/IPv6 CIDR、GEOIP；目标为 `DIRECT`、`REJECT`、`PROXY` 或以 `g_` 开头的组 ID。`final` 始终编译到最后。
+- 每个 token 的组成员仅来自其授权源。规则引用组没有可用成员时返回错误，不会退回直连。若源名称/前缀产生同名节点，按原有去重规则保留首个来源，不能借名称碰撞绕过组归属。
+- 域名预览不查询 DNS、不执行 IP/GEOIP；存在前置 IP 条件时会标记结果不确定。
+
+**Hiddify 与 Clash 的差异：**
+
+Hiddify 4.1.1 继续使用 Base64 **节点**订阅。网站的「导出 Hiddify 规则」生成原生 RouteRule JSON，需在客户端路由规则页选择从 JSON 文件导入；导入会替换原列表，请先备份，修改后需重新导入。这不是 sing-box 完整配置，也不会自动随节点订阅刷新。
+
+原生规则支持域名/IP CIDR以及直连、代理、拦截。不能指定自建/机场策略组，且没有独立 GEOIP 字段，因此含这些条件的配置会阻止导出并解释原因。默认配置为保持旧 Clash 行为保留了 `GEOIP,CN,DIRECT`，**不能直接完整导出到 Hiddify**；如需共同配置，应明确调整此规则，不能把 `.cn` 域名视为等价的中国 IP 判断。不要期待客户端的其他内置路由选项与导入规则天然等价。
+
+Hiddify 的导出格式依据官方 v4.1.1 protobuf 定义与文件导入代码验证，实际流量效果仍需在目标客户端检查；网站不修改本机 Hiddify 配置，也不以「导出成功」冒充端到端分流生效。
+
+详细格式与示例见 [分流 JSON 说明](config/README.md)。升级已有部署时，先应用 `0003_routing_config.sql` 再发布新版 Worker；此迁移不改旧数据或 KV。
 
 ## 免费额度说明
 

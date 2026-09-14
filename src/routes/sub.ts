@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { fetchSourceContent, type FetcherDeps } from "../cache/fetcher";
-import { aggregate } from "../lib/aggregate";
+import { aggregateWithSources } from "../lib/aggregate";
 import { buildClashConfig } from "../lib/clash-render";
 import { renderBase64Sub } from "../lib/base64-render";
 import { detectFormat } from "../lib/detect";
@@ -11,6 +11,7 @@ import {
 import { numVar, type Env } from "../env";
 import {
   getSourcesForToken,
+  getRoutingConfig,
   touchTokenUsed,
   updateSourceFetchStatus,
 } from "../repo";
@@ -85,6 +86,7 @@ async function serveSubscription(
         const detect = detectFormat(src.content ?? "");
         if ("error" in detect) return null;
         return {
+          id: src.id,
           name: src.name,
           prefix: src.prefix,
           proxies: detect.proxies,
@@ -101,6 +103,7 @@ async function serveSubscription(
       const detect = detectFormat(outcome.content);
       if ("error" in detect) return null;
       return {
+        id: src.id,
         name: src.name,
         prefix: src.prefix,
         proxies: detect.proxies,
@@ -116,7 +119,7 @@ async function serveSubscription(
     return c.json({ error: "所有源订阅均不可用，请稍后再试" }, 502);
   }
 
-  const { proxies } = aggregate(okSources);
+  const { proxies, members } = aggregateWithSources(okSources);
   const metadataHeaders = renderSubscriptionMetadataHeaders(
     aggregateSubscriptionMetadata(okSources.map((s) => s.metadata)),
   );
@@ -128,11 +131,16 @@ async function serveSubscription(
     forced ??
     decideFormat(c.req.query("format"), c.req.header("User-Agent") ?? "");
   if (format === "clash") {
-    return c.body(buildClashConfig(proxies), 200, {
-      "Content-Type": "text/yaml; charset=utf-8",
-      "Cache-Control": "no-store",
-      ...metadataHeaders,
-    });
+    try {
+      const { config } = await getRoutingConfig(c.env.DB);
+      return c.body(buildClashConfig(proxies, config, members), 200, {
+        "Content-Type": "text/yaml; charset=utf-8",
+        "Cache-Control": "no-store",
+        ...metadataHeaders,
+      });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 502);
+    }
   }
 
   const rendered = renderBase64Sub(proxies);

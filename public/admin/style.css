@@ -383,3 +383,134 @@ dialog .footer {
 #toast.show {
  opacity: 1;
 }
+
+/* ── 分流设置：延续既有主题，窄屏纵向编辑 ───────────────── */
+.routing-page h1 {
+ margin: 0;
+ font-size: 22px;
+}
+.routing-heading {
+ display: flex;
+ align-items: baseline;
+ justify-content: space-between;
+ gap: 16px;
+ margin-bottom: 16px;
+}
+.routing-page .muted,
+.routing-note {
+ color: var(--muted);
+}
+.routing-note {
+ font-size: 13px;
+ overflow-wrap: anywhere;
+}
+.routing-note.warning {
+ color: var(--warn);
+}
+.routing-toolbar,
+.routing-row-actions {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 8px;
+ align-items: center;
+}
+.routing-save {
+ margin-bottom: 24px;
+}
+.routing-group {
+ min-width: 0;
+ border: 1px solid var(--border);
+ border-radius: 8px;
+ padding: 12px;
+ margin: 12px 0;
+}
+.routing-group legend {
+ padding: 0 6px;
+ color: var(--muted);
+}
+.routing-group-head {
+ display: grid;
+ grid-template-columns: 1fr 1fr;
+ gap: 12px;
+}
+.routing-sources {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 8px 20px;
+ margin: 8px 0 12px;
+}
+.routing-sources label {
+ overflow-wrap: anywhere;
+}
+.routing-rule {
+ display: grid;
+ grid-template-columns: minmax(125px, 1fr) minmax(160px, 1.5fr) minmax(
+   120px,
+   1fr
+  ) auto;
+ gap: 10px;
+ align-items: end;
+ padding: 12px 0;
+ border-bottom: 1px solid var(--border);
+}
+.routing-rule .field {
+ min-width: 0;
+ margin-bottom: 0;
+}
+.routing-rule + button {
+ margin-top: 12px;
+}
+.routing-final {
+ margin-top: 20px;
+ max-width: 400px;
+}
+.routing-json {
+ min-height: 280px;
+ margin: 12px 0;
+}
+.routing-page details {
+ margin: 12px 0 20px;
+}
+.routing-page summary {
+ cursor: pointer;
+}
+.routing-page input[type="file"] {
+ max-width: 100%;
+}
+.routing-page :focus-visible {
+ outline: 2px solid var(--accent);
+ outline-offset: 2px;
+}
+button:disabled {
+ opacity: 0.5;
+ cursor: not-allowed;
+}
+@media (max-width: 700px) {
+ header.topbar {
+  flex-wrap: wrap;
+  gap: 8px;
+ }
+ header.topbar nav {
+  order: 3;
+  flex-basis: 100%;
+ }
+ header.topbar nav a {
+  padding: 6px 10px;
+ }
+ header.topbar #logout-btn {
+  margin-left: auto;
+ }
+ .routing-heading {
+  display: block;
+ }
+ .routing-rule,
+ .routing-group-head {
+  grid-template-columns: 1fr;
+ }
+ .routing-rule {
+  gap: 8px;
+ }
+ .routing-toolbar button {
+  flex: 1 1 auto;
+ }
+}
