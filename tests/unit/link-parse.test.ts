@@ -182,21 +182,35 @@ describe("parseShareLink: hysteria2 / hy2", () => {
 
 describe("parseShareLink: vless", () => {
   it("IPv6 和 ALPN 往返不丢失", () => {
-    const p = parseShareLink("vless://test-user@[2001:db8::1]:443?security=tls&alpn=h2%2Chttp%2F1.1#ipv6")!;
+    const p = parseShareLink(
+      "vless://test-user@[2001:db8::1]:443?security=tls&alpn=h2%2Chttp%2F1.1#ipv6",
+    )!;
     expect(p.alpn).toEqual(["h2", "http/1.1"]);
     const link = toShareLink(p)!;
     expect(link).toContain("@[2001:db8::1]:443");
     expect(parseShareLink(link)).toEqual(p);
   });
   it.each([
-    "security=reality", "security=unknown", "type=xhttp", "encryption=unsupported",
+    "security=reality",
+    "security=unknown",
+    "type=xhttp",
+    "encryption=unsupported",
   ])("拒绝不完整或不支持的安全/传输配置：%s", (query) => {
-    expect(parseShareLink(`vless://test-user@proxy.example.com:443?${query}`)).toBeNull();
+    expect(
+      parseShareLink(`vless://test-user@proxy.example.com:443?${query}`),
+    ).toBeNull();
   });
   it("拒绝将缺少 uuid 或 Reality 公钥的 Clash 节点输出为链接", () => {
-    const base = {name: "broken", type: "vless", server: "proxy.example.com", port: 443};
+    const base = {
+      name: "broken",
+      type: "vless",
+      server: "proxy.example.com",
+      port: 443,
+    };
     expect(toShareLink(base)).toBeNull();
-    expect(toShareLink({...base, uuid: "test-user", "reality-opts": {}})).toBeNull();
+    expect(
+      toShareLink({ ...base, uuid: "test-user", "reality-opts": {} }),
+    ).toBeNull();
   });
   it("Reality 全参数解析", () => {
     const p = parseShareLink(VLESS_REALITY_LINK)!;

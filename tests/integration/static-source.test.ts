@@ -93,22 +93,44 @@ beforeEach(async () => {
 
 describe("静态源管理", () => {
   it("编辑时双向切换类型，保留绑定并清除旧内容/缓存", async () => {
-    mock.get("https://upstream.example.com").intercept({ path: "/sub" }).reply(200, HY2);
+    mock
+      .get("https://upstream.example.com")
+      .intercept({ path: "/sub" })
+      .reply(200, HY2);
     const created = await adminReq("/api/sources", {
-      method: "POST", body: JSON.stringify({name: "切换", url: "https://upstream.example.com/sub"}),
+      method: "POST",
+      body: JSON.stringify({
+        name: "切换",
+        url: "https://upstream.example.com/sub",
+      }),
     });
     expect(created.status).toBe(201);
-    const {source} = await created.json() as {source: {id: number}};
+    const { source } = (await created.json()) as { source: { id: number } };
     await seedTokenWith([source.id]);
-    const patch = (body: object) => adminReq(`/api/sources/${source.id}`, {method: "PATCH", body: JSON.stringify(body)});
-    const toStatic = await patch({kind: "static", content: VLESS_REALITY});
+    const patch = (body: object) =>
+      adminReq(`/api/sources/${source.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+    const toStatic = await patch({ kind: "static", content: VLESS_REALITY });
     expect(toStatic.status).toBe(200);
-    expect(await toStatic.json()).toMatchObject({source: {kind: "static", url: "", content: VLESS_REALITY}});
-    expect(b64Decode(await (await subReq(`/sub/${TOKEN}`)).text())).toContain("vless://");
-    const back = await patch({kind: "fetch", url: "https://upstream.example.com/sub"});
+    expect(await toStatic.json()).toMatchObject({
+      source: { kind: "static", url: "", content: VLESS_REALITY },
+    });
+    expect(b64Decode(await (await subReq(`/sub/${TOKEN}`)).text())).toContain(
+      "vless://",
+    );
+    const back = await patch({
+      kind: "fetch",
+      url: "https://upstream.example.com/sub",
+    });
     expect(back.status).toBe(200);
-    expect(await back.json()).toMatchObject({source: {kind: "fetch", content: null}});
-    expect(b64Decode(await (await subReq(`/sub/${TOKEN}`)).text())).toContain("hysteria2://");
+    expect(await back.json()).toMatchObject({
+      source: { kind: "fetch", content: null },
+    });
+    expect(b64Decode(await (await subReq(`/sub/${TOKEN}`)).text())).toContain(
+      "hysteria2://",
+    );
     expect(mock.calls).toHaveLength(2); // 切换后不能复用上次 fetch 的缓存
   });
   it("创建 static 源：探测走本地解析，不回源", async () => {
@@ -140,19 +162,32 @@ describe("静态源管理", () => {
     const put = vi.spyOn(env.KV, "put");
     const del = vi.spyOn(env.KV, "delete");
     try {
-      const created = await adminReq("/api/sources", {method: "POST", body: JSON.stringify({name: "static", kind: "static", content: HY2})});
-      const {source} = await created.json() as {source: {id: number}};
+      const created = await adminReq("/api/sources", {
+        method: "POST",
+        body: JSON.stringify({ name: "static", kind: "static", content: HY2 }),
+      });
+      const { source } = (await created.json()) as { source: { id: number } };
       expect(created.status).toBe(201);
       await seedTokenWith([source.id]);
       expect((await adminReq("/api/sources")).status).toBe(200);
-      expect((await adminReq(`/api/sources/${source.id}/probe`, {method: "POST"})).status).toBe(200);
+      expect(
+        (await adminReq(`/api/sources/${source.id}/probe`, { method: "POST" }))
+          .status,
+      ).toBe(200);
       expect((await subReq(`/sub/${TOKEN}`)).status).toBe(200);
-      expect((await adminReq(`/api/sources/${source.id}`, {method: "DELETE"})).status).toBe(200);
+      expect(
+        (await adminReq(`/api/sources/${source.id}`, { method: "DELETE" }))
+          .status,
+      ).toBe(200);
       expect(mock.calls).toHaveLength(0);
       expect(get).not.toHaveBeenCalled();
       expect(put).not.toHaveBeenCalled();
       expect(del).not.toHaveBeenCalled();
-    } finally { get.mockRestore(); put.mockRestore(); del.mockRestore(); }
+    } finally {
+      get.mockRestore();
+      put.mockRestore();
+      del.mockRestore();
+    }
   });
 
   it("content 缺失 / 不可解析 → 400", async () => {

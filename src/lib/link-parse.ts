@@ -340,17 +340,24 @@ function parseVless(link: string): Proxy | null {
   const flow = q("flow");
   const rawNetwork = q("type") ?? q("network") ?? "tcp";
   const network = rawNetwork === "raw" ? "tcp" : rawNetwork;
-  if (!["none", "tls", "reality"].includes(security) ||
-      !["tcp", "ws", "grpc"].includes(network) ||
-      (q("encryption") ?? "none") !== "none" ||
-      (security === "reality" && !pbk)) return null;
+  if (
+    !["none", "tls", "reality"].includes(security) ||
+    !["tcp", "ws", "grpc"].includes(network) ||
+    (q("encryption") ?? "none") !== "none" ||
+    (security === "reality" && !pbk)
+  )
+    return null;
   const path = q("path");
   const host = q("host");
   const serviceName = q("serviceName");
-  const alpn = q("alpn")?.split(",").map((v) => v.trim()).filter(Boolean);
+  const alpn = q("alpn")
+    ?.split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
   const insecure =
     q("allowInsecure") === "1" ||
-    q("insecure") === "1" || q("insecure") === "true" ||
+    q("insecure") === "1" ||
+    q("insecure") === "true" ||
     q("allowInsecure") === "true";
 
   const proxy: Proxy = {
@@ -387,7 +394,8 @@ function toVlessLink(p: Proxy): string | null {
   if (typeof p.flow === "string") params.set("flow", p.flow);
   const reality = p["reality-opts"] as VlessOpts["reality-opts"] | undefined;
   if (reality) {
-    if (typeof reality["public-key"] !== "string" || !reality["public-key"]) return null;
+    if (typeof reality["public-key"] !== "string" || !reality["public-key"])
+      return null;
     params.set("security", "reality");
     if (reality["public-key"]) params.set("pbk", reality["public-key"]);
     if (reality["short-id"]) params.set("sid", reality["short-id"]);
@@ -397,7 +405,14 @@ function toVlessLink(p: Proxy): string | null {
   if (typeof p.servername === "string") params.set("sni", p.servername);
   const fp = p["client-fingerprint"];
   if (typeof fp === "string") params.set("fp", fp);
-  const rawNetwork = typeof p.network === "string" ? p.network : p["ws-opts"] ? "ws" : p["grpc-opts"] ? "grpc" : "tcp";
+  const rawNetwork =
+    typeof p.network === "string"
+      ? p.network
+      : p["ws-opts"]
+        ? "ws"
+        : p["grpc-opts"]
+          ? "grpc"
+          : "tcp";
   const network = rawNetwork === "raw" ? "tcp" : rawNetwork;
   if (!["tcp", "ws", "grpc"].includes(network)) return null;
   if (Array.isArray(p.alpn)) params.set("alpn", p.alpn.join(","));
@@ -416,7 +431,10 @@ function toVlessLink(p: Proxy): string | null {
   }
   if (p["skip-cert-verify"] === true) params.set("allowInsecure", "1");
   const q = params.toString();
-  const host = p.server.includes(":") && !p.server.startsWith("[") ? `[${p.server}]` : p.server;
+  const host =
+    p.server.includes(":") && !p.server.startsWith("[")
+      ? `[${p.server}]`
+      : p.server;
   return `vless://${encodeURIComponent(p.uuid)}@${host}:${p.port}${q ? `?${q}` : ""}#${encodeURIComponent(p.name)}`;
 }
 

@@ -97,9 +97,17 @@ export async function listSources(db: D1Database): Promise<SourceListRow[]> {
 }
 
 /** URL 去重查询；排除编辑中的源，所有 D1 查询集中在仓储层。 */
-export async function findSourceByUrl(db: D1Database, url: string, excludeId = 0): Promise<{ id: number } | null> {
-  return db.prepare("SELECT id FROM sources WHERE kind = 'fetch' AND url = ? AND id != ?")
-    .bind(url, excludeId).first<{ id: number }>();
+export async function findSourceByUrl(
+  db: D1Database,
+  url: string,
+  excludeId = 0,
+): Promise<{ id: number } | null> {
+  return db
+    .prepare(
+      "SELECT id FROM sources WHERE kind = 'fetch' AND url = ? AND id != ?",
+    )
+    .bind(url, excludeId)
+    .first<{ id: number }>();
 }
 
 export async function createSource(
@@ -166,7 +174,6 @@ export async function updateSource(
   if (fields.url !== undefined) {
     sets.push("url = ?");
     binds.push(fields.url);
-
   }
   if (fields.prefix !== undefined) {
     sets.push("prefix = ?");
@@ -185,7 +192,11 @@ export async function updateSource(
     sets.push("kind = ?");
     binds.push(fields.kind);
   }
-  if (fields.url !== undefined || fields.content !== undefined || fields.kind !== undefined) {
+  if (
+    fields.url !== undefined ||
+    fields.content !== undefined ||
+    fields.kind !== undefined
+  ) {
     sets.push(
       "last_fetch_at = NULL, last_fetch_status = NULL, last_fetch_error = NULL, format = NULL",
     );

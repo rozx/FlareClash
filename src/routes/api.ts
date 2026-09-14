@@ -148,7 +148,10 @@ api.get("/sources", async (c) => {
   const sources = await listSources(c.env.DB);
   const withMetadata = await Promise.all(
     sources.map(async (source) => {
-      const cache = source.kind === "static" ? null : await readSourceCache(c.env.KV, source.id);
+      const cache =
+        source.kind === "static"
+          ? null
+          : await readSourceCache(c.env.KV, source.id);
       return {
         ...source,
         subscription_meta: cache?.metadata ?? null,
@@ -178,9 +181,11 @@ api.post("/sources", async (c) => {
   if ("error" in location) return c.json({ error: location.error }, 400);
   if (location.kind === "fetch") {
     const dup = await findSourceByUrl(c.env.DB, location.url);
-    if (dup) return c.json({ error: "该 URL 已存在（源 id " + dup.id + "）" }, 409);
+    if (dup)
+      return c.json({ error: "该 URL 已存在（源 id " + dup.id + "）" }, 409);
   }
-  if (body.prefix != null && typeof body.prefix !== "string") return c.json({error: "prefix 必须是字符串"}, 400);
+  if (body.prefix != null && typeof body.prefix !== "string")
+    return c.json({ error: "prefix 必须是字符串" }, 400);
   let src = await createSource(c.env.DB, {
     ...location,
     name: body.name.trim(),
@@ -206,30 +211,46 @@ api.patch("/sources/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const src = await getSource(c.env.DB, id);
   if (!src) return c.json({ error: "not found" }, 404);
-  const body = (await c.req.json<{
-    name?: string; kind?: string; url?: string; content?: string;
-    prefix?: string | null; cacheTtl?: number;
-  }>().catch(() => null)) ?? {};
+  const body =
+    (await c.req
+      .json<{
+        name?: string;
+        kind?: string;
+        url?: string;
+        content?: string;
+        prefix?: string | null;
+        cacheTtl?: number;
+      }>()
+      .catch(() => null)) ?? {};
   const location = parseSourceLocation(body, src);
-  if ("error" in location) return c.json({error: location.error}, 400);
-  if (body.prefix != null && typeof body.prefix !== "string") return c.json({error: "prefix 必须是字符串"}, 400);
+  if ("error" in location) return c.json({ error: location.error }, 400);
+  if (body.prefix != null && typeof body.prefix !== "string")
+    return c.json({ error: "prefix 必须是字符串" }, 400);
   const kindChanged = location.kind !== src.kind;
   const urlChanged = location.url !== src.url;
   const contentChanged = location.content !== src.content;
   if (location.kind === "fetch" && (kindChanged || urlChanged)) {
     const dup = await findSourceByUrl(c.env.DB, location.url, id);
-    if (dup) return c.json({error: "该 URL 已存在（源 id " + dup.id + "）"}, 409);
+    if (dup)
+      return c.json({ error: "该 URL 已存在（源 id " + dup.id + "）" }, 409);
   }
   const updated = await updateSource(c.env.DB, id, {
     kind: kindChanged ? location.kind : undefined,
     url: urlChanged ? location.url : undefined,
     content: contentChanged ? location.content : undefined,
-    name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : undefined,
+    name:
+      typeof body.name === "string" && body.name.trim()
+        ? body.name.trim()
+        : undefined,
     prefix: body.prefix === undefined ? undefined : body.prefix?.trim() || null,
-    cacheTtl: body.cacheTtl === undefined ? undefined : numVar(String(body.cacheTtl), 1800),
+    cacheTtl:
+      body.cacheTtl === undefined
+        ? undefined
+        : numVar(String(body.cacheTtl), 1800),
   });
   // 仅旧 fetch 源可能有缓存；转 static 时清理一次，静态路径本身不碰 KV。
-  if (src.kind === "fetch" && (kindChanged || urlChanged)) await clearSourceCache(c.env.KV, id);
+  if (src.kind === "fetch" && (kindChanged || urlChanged))
+    await clearSourceCache(c.env.KV, id);
   return c.json({ source: updated });
 });
 

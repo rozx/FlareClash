@@ -490,7 +490,9 @@ async function probeOne(src) {
       method: "POST",
     });
     if (probe.ok)
-      toast(`✓ ${probe.format} · ${probe.nodeCount} 节点（${probe.origin ?? "本地解析"}）`);
+      toast(
+        `✓ ${probe.format} · ${probe.nodeCount} 节点（${probe.origin ?? "本地解析"}）`,
+      );
     else toast(`✗ 探测失败：${probe.error}`);
     renderSourcesPage(document.getElementById("page"));
   } catch (ex) {
