@@ -1,6 +1,6 @@
 # 验证记录
 
-分支：`feat/routing-settings`；本轮基于已有格式化提交 `b9d6098`。功能代码未提交、未发布；未读取或修改客户端的私有配置。
+本记录为发布前验证，功能随后提交到 main（`c1c62a5`），基于已有格式化提交 `b9d6098`。未读取或修改客户端的私有配置；以下检查不等同于生产发布或客户端现场验证。
 
 ## 已通过
 
@@ -33,4 +33,4 @@
 - `npm audit` 显示 4 项 high，均来自既有开发依赖：@cloudflare/vitest-pool-workers 0.22.0、miniflare 5.20260815.0-alpha、sharp 0.35.2、wrangler 4.126.0，版本与基线相同；未执行破坏性的 audit fix --force。新加 Playwright/Node 类型依赖不在此列表。
 - 现有本地 Wrangler observability.redact_query_string 字段仍有兼容性警告；未改本地配置，不能假定日志已脱敏。
 
-发布顺序：先检查/应用 `0003_routing_config.sql`，再发布 Worker 与静态资产；Clash 更新订阅，Hiddify 根据兼容提示单独导入规则。归档和 Git/生产发布应另行执行。
+发布顺序：先检查/应用 `0003_routing_config.sql`，再发布 Worker 与静态资产；Clash 更新订阅，Hiddify 根据兼容提示单独导入规则。归档与生产发布另行记录，不以本文件的测试结果替代线上检查。
