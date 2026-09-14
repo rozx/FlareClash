@@ -329,19 +329,56 @@ async function renderSourcesPage(page) {
 
 function sourceDialog(src) {
   const isEdit = !!src;
+  const isStatic = src?.kind === "static";
   const nameIn = el("input", {
     type: "text",
     name: "name",
     required: true,
     value: src?.name ?? "",
   });
+  const kindSel = el(
+    "select",
+    {
+      name: "kind",
+      onchange: () => {
+        const st = kindSel.value === "static";
+        urlField.style.display = st ? "none" : "";
+        ttlField.style.display = st ? "none" : "";
+        contentField.style.display = st ? "" : "none";
+        urlIn.required = !st;
+        contentIn.required = st;
+        urlIn.disabled = st;
+        ttlIn.disabled = st;
+        contentIn.disabled = !st;
+      },
+    },
+    el("option", {
+      value: "fetch",
+      text: "URL 订阅（回源+缓存）",
+      selected: !isStatic,
+    }),
+    el("option", {
+      value: "static",
+      text: "手动节点（静态，不回源）",
+      selected: isStatic,
+    }),
+  );
   const urlIn = el("input", {
     type: "url",
     name: "url",
-    required: true,
+    required: !isStatic,
+    disabled: isStatic,
     value: src?.url ?? "",
     placeholder: "https://...",
   });
+  const contentIn = el("textarea", {
+    name: "content",
+    rows: 5,
+    required: isStatic,
+    disabled: !isStatic,
+    placeholder: "每行一条分享链接（vless/vmess/ss/trojan/hysteria2）",
+  });
+  contentIn.value = src?.content ?? "";
   const prefixIn = el("input", {
     type: "text",
     name: "prefix",
@@ -350,6 +387,7 @@ function sourceDialog(src) {
   const ttlIn = el("input", {
     type: "number",
     name: "cacheTtl",
+    disabled: isStatic,
     min: 60,
     max: 86400,
     value: src?.cache_ttl ?? 1800,
@@ -370,6 +408,16 @@ function sourceDialog(src) {
     submitBtn,
   );
 
+  const urlField = field("上游 URL *（http/https）", urlIn);
+  const ttlField = field("缓存有效期（秒，默认 1800）", ttlIn);
+  const contentField = field("节点内容 *（每行一条分享链接）", contentIn);
+  if (isStatic) {
+    urlField.style.display = "none";
+    ttlField.style.display = "none";
+  } else {
+    contentField.style.display = "none";
+  }
+
   const form = el(
     "form",
     {
@@ -383,7 +431,10 @@ function sourceDialog(src) {
         }
         const payload = {
           name: nameIn.value.trim(),
-          url: urlIn.value.trim(),
+          kind: kindSel.value,
+          url: kindSel.value === "fetch" ? urlIn.value.trim() : undefined,
+          content:
+            kindSel.value === "static" ? contentIn.value.trim() : undefined,
           prefix: prefixIn.value.trim() || null,
           cacheTtl: Number(ttlIn.value) || 1800,
         };
@@ -420,9 +471,11 @@ function sourceDialog(src) {
       },
     },
     field("名称 *", nameIn),
-    field("上游 URL *（http/https）", urlIn),
+    field("源类型", kindSel),
+    urlField,
+    contentField,
     field("节点名前缀（留空使用源名）", prefixIn),
-    field("缓存有效期（秒，默认 1800）", ttlIn),
+    ttlField,
     probeOut,
     err,
     footer,
@@ -437,7 +490,7 @@ async function probeOne(src) {
       method: "POST",
     });
     if (probe.ok)
-      toast(`✓ ${probe.format} · ${probe.nodeCount} 节点（${probe.origin}）`);
+      toast(`✓ ${probe.format} · ${probe.nodeCount} 节点（${probe.origin ?? "本地解析"}）`);
     else toast(`✗ 探测失败：${probe.error}`);
     renderSourcesPage(document.getElementById("page"));
   } catch (ex) {

@@ -78,8 +78,19 @@ async function serveSubscription(
   const waitUntil = (p: Promise<unknown>) => c.executionCtx.waitUntil(p);
 
   // 各源并行：取缓存或回源，失败源降级跳过（规格：源获取失败降级）
+  // static 源内容存 D1，直接解析：不回源、不读写 KV，不受节流阀约束。
   const perSource = await Promise.all(
     sources.map(async (src) => {
+      if (src.kind === "static") {
+        const detect = detectFormat(src.content ?? "");
+        if ("error" in detect) return null;
+        return {
+          name: src.name,
+          prefix: src.prefix,
+          proxies: detect.proxies,
+          metadata: null, // 自建节点无上游用量元数据
+        };
+      }
       const deps = buildFetcherDeps(c.env, src.id, waitUntil);
       const outcome = await fetchSourceContent(deps, {
         id: src.id,

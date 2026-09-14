@@ -6,15 +6,22 @@ import {
   signSession,
   verifySession,
 } from "../auth";
-import { probeSource, type FetcherDeps } from "../cache/fetcher";
+import {
+  probeSource,
+  type FetcherDeps,
+  type ProbeResult,
+} from "../cache/fetcher";
 import { clearSourceCache, readSourceCache } from "../cache/kv";
 import { numVar, type Env } from "../env";
+import { detectFormat } from "../lib/detect";
+import { parseSourceLocation } from "../lib/source-input";
 import {
   createSource,
   createToken,
   deleteSource,
   deleteToken,
   existingSourceIds,
+  findSourceByUrl,
   getSource,
   getToken,
   listSources,
@@ -100,6 +107,26 @@ function fetcherDeps(env: Env): FetcherDeps {
 
 /** 源探测：复用订阅端同一节流封装（规格：节流内不二次回源）。 */
 async function probeAndRecord(env: Env, src: SourceRow) {
+  // static 源不回源：直接解析 D1 内容，写状态与格式，无 KV 操作
+  if (src.kind === "static") {
+    const detect = detectFormat(src.content ?? "");
+    const ok = !("error" in detect);
+    await updateSourceFetchStatus(
+      env.DB,
+      src.id,
+      ok ? "ok" : "error",
+      ok ? undefined : detect.error,
+    );
+    if (ok) {
+      await setSourceFormat(env.DB, src.id, detect.format);
+    }
+    return {
+      ok,
+      ...(ok
+        ? { format: detect.format, nodeCount: detect.proxies.length }
+        : { error: detect.error }),
+    } satisfies ProbeResult;
+  }
   const probe = await probeSource(fetcherDeps(env), {
     id: src.id,
     url: src.url,
@@ -121,7 +148,7 @@ api.get("/sources", async (c) => {
   const sources = await listSources(c.env.DB);
   const withMetadata = await Promise.all(
     sources.map(async (source) => {
-      const cache = await readSourceCache(c.env.KV, source.id);
+      const cache = source.kind === "static" ? null : await readSourceCache(c.env.KV, source.id);
       return {
         ...source,
         subscription_meta: cache?.metadata ?? null,
@@ -136,7 +163,9 @@ api.post("/sources", async (c) => {
     (await c.req
       .json<{
         name?: string;
+        kind?: string;
         url?: string;
+        content?: string;
         prefix?: string;
         cacheTtl?: number;
         probe?: boolean;
@@ -145,20 +174,16 @@ api.post("/sources", async (c) => {
   if (typeof body.name !== "string" || !body.name.trim()) {
     return c.json({ error: "name 必填" }, 400);
   }
-  if (typeof body.url !== "string" || !/^https?:\/\//.test(body.url.trim())) {
-    return c.json({ error: "url 必须是 http(s) 地址" }, 400);
+  const location = parseSourceLocation(body);
+  if ("error" in location) return c.json({ error: location.error }, 400);
+  if (location.kind === "fetch") {
+    const dup = await findSourceByUrl(c.env.DB, location.url);
+    if (dup) return c.json({ error: "该 URL 已存在（源 id " + dup.id + "）" }, 409);
   }
-  const url = body.url.trim();
-  const dup = await c.env.DB.prepare("SELECT id FROM sources WHERE url = ?")
-    .bind(url)
-    .first();
-  if (dup) {
-    return c.json({ error: "该 URL 已存在（源 id " + dup.id + "）" }, 409);
-  }
-
+  if (body.prefix != null && typeof body.prefix !== "string") return c.json({error: "prefix 必须是字符串"}, 400);
   let src = await createSource(c.env.DB, {
+    ...location,
     name: body.name.trim(),
-    url,
     prefix: body.prefix?.trim() || null,
     cacheTtl: numVar(String(body.cacheTtl ?? 1800), 1800),
   });
@@ -181,38 +206,30 @@ api.patch("/sources/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const src = await getSource(c.env.DB, id);
   if (!src) return c.json({ error: "not found" }, 404);
-  const body =
-    (await c.req
-      .json<{
-        name?: string;
-        url?: string;
-        prefix?: string | null;
-        cacheTtl?: number;
-      }>()
-      .catch(() => null)) ?? {};
-
-  const urlChanged =
-    typeof body.url === "string" && body.url.trim() !== src.url;
-  const updated = await updateSource(c.env.DB, id, {
-    name:
-      typeof body.name === "string" && body.name.trim()
-        ? body.name.trim()
-        : undefined,
-    url: urlChanged ? body.url!.trim() : undefined,
-    prefix:
-      body.prefix === undefined
-        ? undefined
-        : body.prefix === null
-          ? null
-          : body.prefix.trim() || null,
-    cacheTtl:
-      body.cacheTtl === undefined
-        ? undefined
-        : numVar(String(body.cacheTtl), 1800),
-  });
-  if (urlChanged) {
-    await clearSourceCache(c.env.KV, id); // 规格：改 URL 清缓存
+  const body = (await c.req.json<{
+    name?: string; kind?: string; url?: string; content?: string;
+    prefix?: string | null; cacheTtl?: number;
+  }>().catch(() => null)) ?? {};
+  const location = parseSourceLocation(body, src);
+  if ("error" in location) return c.json({error: location.error}, 400);
+  if (body.prefix != null && typeof body.prefix !== "string") return c.json({error: "prefix 必须是字符串"}, 400);
+  const kindChanged = location.kind !== src.kind;
+  const urlChanged = location.url !== src.url;
+  const contentChanged = location.content !== src.content;
+  if (location.kind === "fetch" && (kindChanged || urlChanged)) {
+    const dup = await findSourceByUrl(c.env.DB, location.url, id);
+    if (dup) return c.json({error: "该 URL 已存在（源 id " + dup.id + "）"}, 409);
   }
+  const updated = await updateSource(c.env.DB, id, {
+    kind: kindChanged ? location.kind : undefined,
+    url: urlChanged ? location.url : undefined,
+    content: contentChanged ? location.content : undefined,
+    name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : undefined,
+    prefix: body.prefix === undefined ? undefined : body.prefix?.trim() || null,
+    cacheTtl: body.cacheTtl === undefined ? undefined : numVar(String(body.cacheTtl), 1800),
+  });
+  // 仅旧 fetch 源可能有缓存；转 static 时清理一次，静态路径本身不碰 KV。
+  if (src.kind === "fetch" && (kindChanged || urlChanged)) await clearSourceCache(c.env.KV, id);
   return c.json({ source: updated });
 });
 
@@ -221,7 +238,7 @@ api.delete("/sources/:id", async (c) => {
   const src = await getSource(c.env.DB, id);
   if (!src) return c.json({ error: "not found" }, 404);
   await deleteSource(c.env.DB, id); // 级联删绑定
-  await clearSourceCache(c.env.KV, id); // 级联清缓存
+  if (src.kind === "fetch") await clearSourceCache(c.env.KV, id); // static 没有 KV 缓存
   return c.json({ ok: true });
 });
 

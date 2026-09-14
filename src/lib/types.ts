@@ -37,4 +37,5 @@ export const REVERSIBLE_TYPES: ReadonlySet<string> = new Set([
  "vmess",
  "trojan",
  "hysteria2",
+ "vless",
 ]);

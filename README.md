@@ -11,7 +11,8 @@
 
 - **多源聚合**：token 关联多个源订阅，节点加源前缀去重后合并返回
 - **双格式自适应**：Clash/mihomo UA 收完整 Clash YAML（默认策略组 + 地区分组），其他客户端收 base64 分享链接；`?format=clash|base64` 可显式指定
-- **上游格式探测**：Clash YAML 与 base64 分享链接（vmess/ss/trojan/hysteria2）自动识别
+- **上游格式探测**：Clash YAML 与 base64 分享链接（vmess/ss/trojan/hysteria2/vless）自动识别；VLESS 支持 Reality、TLS、TCP/WS/gRPC、IPv6 与 ALPN
+- **手动节点源**：直接粘贴分享链接（每行一条，也兼容 base64 或 Clash YAML），内容存 D1，不回源、不占 KV 读写额度；可与 URL 源混合绑定 token
 - **用量与到期透传**：采集并聚合上游 `subscription-userinfo`，Hiddify 可显示已用/总量/到期；管理后台按源展示用量
 - **缓存与节流**：KV 同步缓存上游内容与用量元数据，回源频率受 `MIN_FETCH_INTERVAL` 硬性限制，仍保持每次成功回源 3 次 KV 写
 - **token 生命周期**：随机 43 字符 token、可选过期时间、即时禁用/启用、最后使用时间记录
@@ -84,14 +85,14 @@ npm run dev                      # http://localhost:8787
 ### 测试
 
 ```bash
-npm test          # 109 个单测 + 集成测试（vitest workers 池，真实 D1/KV/miniflare）
+npm test          # 单测 + 集成测试（vitest workers 池，真实 D1/KV/miniflare）
 npm run typecheck
 ```
 
 ## 使用流程
 
 1. 打开 `/admin/`，用 `ADMIN_PASSWORD` 登录
-2. 「源管理」→ 新建源：填机场订阅 URL，自动探测格式与节点数
+2. 「源管理」→ 新建源：选择「URL 订阅」填写订阅地址，或选择「手动节点」粘贴分享链接；保存时探测格式与节点数。编辑时可双向切换类型，原 token 绑定不变
 3. 「Token 管理」→ 新建 token：备注名（如「老王」）、可选过期时间、勾选可见的源
 4. 按客户端复制对应地址：Clash/Mihomo 使用 `/sub/clash/<token>`，Hiddify 等使用 `/sub/base64/<token>`
 5. 不想给了？禁用或删除 token，立即生效

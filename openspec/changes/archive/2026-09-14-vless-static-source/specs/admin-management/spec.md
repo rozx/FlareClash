@@ -1,34 +1,6 @@
-# 管理能力规格（admin-management）
+# 管理能力规格（admin-management）delta
 
-## Purpose
-
-为单管理员提供认证与全部管理 API：上游源订阅的增删改查与格式探测、access token 的完整生命周期管理及其与源的多对多绑定。
-
-## Requirements
-
-### Requirement: 管理员认证
-
-系统 SHALL 以环境变量中的管理员密码保护所有管理 API（`/api/*`）与管理页面。
-
-- 密码通过 `POST /api/login` 提交，正确时签发签名会话 cookie，错误时返回 401
-- 会话 cookie MUST 由服务端密钥签名（防伪造）并设置过期时间
-- 除登录端点外的所有管理 API MUST 校验会话 cookie，未认证请求返回 401
-- 未认证访问管理页面时 MUST 跳转或呈现登录界面，不暴露任何管理数据
-
-#### Scenario: 登录成功
-
-- **WHEN** 以正确密码请求 `POST /api/login`
-- **THEN** 返回 200 并设置签名会话 cookie
-
-#### Scenario: 登录失败
-
-- **WHEN** 以错误密码请求 `POST /api/login`
-- **THEN** 返回 401，不签发 cookie
-
-#### Scenario: 未认证 API 访问
-
-- **WHEN** 不携带有效会话 cookie 请求任意 `/api/*` 管理端点
-- **THEN** 返回 401，不执行任何管理操作
+## MODIFIED Requirements
 
 ### Requirement: 源订阅管理
 
@@ -126,32 +98,3 @@
 
 - **WHEN** 管理员对 static 源点击探测
 - **THEN** 立即返回解析结果（无节流等待），健康状态写库
-
-### Requirement: Token 生命周期管理
-
-系统 SHALL 提供 access token 的创建、禁用、启用、删除与查询能力。
-
-- 创建 token MUST 生成不可预测的随机 token 值，并支持可选的过期时间与备注名
-- token MUST 可被单独禁用与重新启用，禁用立即生效
-- 删除 token 后其值立即失效
-- token 列表 MUST 展示：名称、值、启用状态、过期时间、绑定的源、最后使用时间
-
-#### Scenario: 创建 token 并绑定源
-
-- **WHEN** 管理员创建 token 并勾选绑定 2 个源
-- **THEN** token 创建成功，以该 token 访问 `/sub/:token` 可获取这 2 个源的聚合内容
-
-#### Scenario: 禁用 token 立即生效
-
-- **WHEN** 管理员禁用某 token 后，客户端立即以该 token 请求订阅
-- **THEN** 请求被拒绝（403）
-
-#### Scenario: 修改 token 的源绑定
-
-- **WHEN** 管理员为一个已存在的 token 增减绑定源
-- **THEN** 下次以该 token 请求即返回新绑定集合的聚合结果，无需重建 token
-
-#### Scenario: 过期 token 自动失效
-
-- **WHEN** token 的过期时间已过，客户端以该 token 请求订阅
-- **THEN** 请求被拒绝（403），列表中该 token 显示已过期

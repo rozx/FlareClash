@@ -1,5 +1,5 @@
 /**
- * 分享链接解析（vmess/ss/trojan/hysteria2 → Proxy）
+ * 分享链接解析（vmess/ss/trojan/hysteria2/vless → Proxy）
  * 与逆向转换（Proxy → 分享链接）。
  *
  * 容错策略（design.md D4）：单条链接解析失败返回 null（调用方计数跳过），
@@ -14,6 +14,7 @@ export const SUPPORTED_SCHEMES = [
   "trojan",
   "hysteria2",
   "hy2",
+  "vless",
 ] as const;
 
 function safeDecodeURIComponent(s: string): string {
@@ -312,6 +313,113 @@ function toHysteria2Link(p: Proxy): string {
   return `hysteria2://${encodeURIComponent(String(p.password))}@${p.server}:${p.port}${q ? `?${q}` : ""}#${encodeURIComponent(p.name)}`;
 }
 
+// ── vless ────────────────────────────────────────────────────────
+
+interface VlessOpts {
+  "reality-opts"?: { "public-key"?: string; "short-id"?: string };
+}
+
+function parseVless(link: string): Proxy | null {
+  let u: URL;
+  try {
+    u = new URL(link);
+  } catch {
+    return null;
+  }
+  const port = Number(u.port);
+  if (!Number.isInteger(port) || port <= 0) return null;
+  const uuid = safeDecodeURIComponent(u.username);
+  if (!uuid || !u.hostname || u.password) return null;
+
+  const q = (k: string) => u.searchParams.get(k) ?? undefined;
+  const security = q("security") ?? "none"; // none | tls | reality
+  const sni = q("sni") ?? q("peer");
+  const fp = q("fp");
+  const pbk = q("pbk");
+  const sid = q("sid");
+  const flow = q("flow");
+  const rawNetwork = q("type") ?? q("network") ?? "tcp";
+  const network = rawNetwork === "raw" ? "tcp" : rawNetwork;
+  if (!["none", "tls", "reality"].includes(security) ||
+      !["tcp", "ws", "grpc"].includes(network) ||
+      (q("encryption") ?? "none") !== "none" ||
+      (security === "reality" && !pbk)) return null;
+  const path = q("path");
+  const host = q("host");
+  const serviceName = q("serviceName");
+  const alpn = q("alpn")?.split(",").map((v) => v.trim()).filter(Boolean);
+  const insecure =
+    q("allowInsecure") === "1" ||
+    q("insecure") === "1" || q("insecure") === "true" ||
+    q("allowInsecure") === "true";
+
+  const proxy: Proxy = {
+    name: safeDecodeURIComponent(u.hash ? u.hash.slice(1) : "") || u.hostname,
+    type: "vless",
+    server: u.hostname.replace(/^\[|\]$/g, ""),
+    port,
+    uuid,
+    ...(flow ? { flow } : {}),
+    ...(network && network !== "tcp" ? { network } : {}),
+    ...(security === "tls" || security === "reality" ? { tls: true } : {}),
+    ...(sni ? { servername: sni } : {}),
+    ...(fp ? { "client-fingerprint": fp } : {}),
+    ...(alpn?.length ? { alpn } : {}),
+    ...(insecure ? { "skip-cert-verify": true } : {}),
+  };
+  if (security === "reality") {
+    const reality: VlessOpts["reality-opts"] = {};
+    if (pbk) reality["public-key"] = pbk;
+    if (sid) reality["short-id"] = sid;
+    proxy["reality-opts"] = reality;
+  }
+  if (network === "ws") proxy["ws-opts"] = wsOpts(path, host);
+  if (network === "grpc")
+    proxy["grpc-opts"] = { "grpc-service-name": serviceName || "" };
+  return proxy;
+}
+
+function toVlessLink(p: Proxy): string | null {
+  if (typeof p.uuid !== "string" || !p.uuid) return null;
+  if (p.encryption !== undefined && p.encryption !== "none") return null;
+  const params = new URLSearchParams();
+  params.set("encryption", "none");
+  if (typeof p.flow === "string") params.set("flow", p.flow);
+  const reality = p["reality-opts"] as VlessOpts["reality-opts"] | undefined;
+  if (reality) {
+    if (typeof reality["public-key"] !== "string" || !reality["public-key"]) return null;
+    params.set("security", "reality");
+    if (reality["public-key"]) params.set("pbk", reality["public-key"]);
+    if (reality["short-id"]) params.set("sid", reality["short-id"]);
+  } else if (p.tls === true) {
+    params.set("security", "tls");
+  }
+  if (typeof p.servername === "string") params.set("sni", p.servername);
+  const fp = p["client-fingerprint"];
+  if (typeof fp === "string") params.set("fp", fp);
+  const rawNetwork = typeof p.network === "string" ? p.network : p["ws-opts"] ? "ws" : p["grpc-opts"] ? "grpc" : "tcp";
+  const network = rawNetwork === "raw" ? "tcp" : rawNetwork;
+  if (!["tcp", "ws", "grpc"].includes(network)) return null;
+  if (Array.isArray(p.alpn)) params.set("alpn", p.alpn.join(","));
+  else if (typeof p.alpn === "string") params.set("alpn", p.alpn);
+  if (network !== "tcp") params.set("type", network);
+  const ws = p["ws-opts"] as
+    | { path?: string; headers?: { Host?: string } }
+    | undefined;
+  const grpc = p["grpc-opts"] as { "grpc-service-name"?: string } | undefined;
+  if (ws) {
+    if (ws.path) params.set("path", ws.path);
+    if (ws.headers?.Host) params.set("host", ws.headers.Host);
+  } else if (grpc) {
+    if (grpc["grpc-service-name"])
+      params.set("serviceName", grpc["grpc-service-name"]);
+  }
+  if (p["skip-cert-verify"] === true) params.set("allowInsecure", "1");
+  const q = params.toString();
+  const host = p.server.includes(":") && !p.server.startsWith("[") ? `[${p.server}]` : p.server;
+  return `vless://${encodeURIComponent(p.uuid)}@${host}:${p.port}${q ? `?${q}` : ""}#${encodeURIComponent(p.name)}`;
+}
+
 // ── 入口 ─────────────────────────────────────────────────────────
 
 /** 单条分享链接 → Proxy；无法解析返回 null。 */
@@ -330,6 +438,8 @@ export function parseShareLink(link: string): Proxy | null {
     case "hysteria2":
     case "hy2":
       return parseHysteria2(link);
+    case "vless":
+      return parseVless(link);
     default:
       return null;
   }
@@ -346,6 +456,8 @@ export function toShareLink(p: Proxy): string | null {
       return toTrojanLink(p);
     case "hysteria2":
       return toHysteria2Link(p);
+    case "vless":
+      return toVlessLink(p);
     default:
       return null;
   }

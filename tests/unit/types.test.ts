@@ -51,6 +51,7 @@ describe("isProxy 类型守卫", () => {
       "hysteria2",
       "ss",
       "trojan",
+      "vless",
       "vmess",
     ]);
   });

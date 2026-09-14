@@ -37,6 +37,11 @@ const TROJAN_LINK =
 const HY2_LINK =
   "hysteria2://authpass@hk.example.com:443?sni=hk.example.com&insecure=1&obfs=salamander&obfs-password=ob123#%F0%9F%87%AD%F0%9F%87%B0";
 
+const VLESS_REALITY_LINK =
+  "vless://11111111-2222-4333-8444-555555555555@derp.example.com:8443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=0123456789abcdef&type=tcp#%F0%9F%87%AD%F0%9F%87%B0-Reality";
+const VLESS_TLS_WS_LINK =
+  "vless://b831381d-6324-4d53-ad4f-8cda48b30811@jp.example.com:443?encryption=none&security=tls&sni=jp.example.com&type=ws&path=%2Fvless&host=cdn.example.com#vless-ws";
+
 // ── vmess ────────────────────────────────────────────────────────
 
 describe("parseShareLink: vmess", () => {
@@ -173,6 +178,83 @@ describe("parseShareLink: hysteria2 / hy2", () => {
   });
 });
 
+// ── vless ────────────────────────────────────────────────────────
+
+describe("parseShareLink: vless", () => {
+  it("IPv6 和 ALPN 往返不丢失", () => {
+    const p = parseShareLink("vless://test-user@[2001:db8::1]:443?security=tls&alpn=h2%2Chttp%2F1.1#ipv6")!;
+    expect(p.alpn).toEqual(["h2", "http/1.1"]);
+    const link = toShareLink(p)!;
+    expect(link).toContain("@[2001:db8::1]:443");
+    expect(parseShareLink(link)).toEqual(p);
+  });
+  it.each([
+    "security=reality", "security=unknown", "type=xhttp", "encryption=unsupported",
+  ])("拒绝不完整或不支持的安全/传输配置：%s", (query) => {
+    expect(parseShareLink(`vless://test-user@proxy.example.com:443?${query}`)).toBeNull();
+  });
+  it("拒绝将缺少 uuid 或 Reality 公钥的 Clash 节点输出为链接", () => {
+    const base = {name: "broken", type: "vless", server: "proxy.example.com", port: 443};
+    expect(toShareLink(base)).toBeNull();
+    expect(toShareLink({...base, uuid: "test-user", "reality-opts": {}})).toBeNull();
+  });
+  it("Reality 全参数解析", () => {
+    const p = parseShareLink(VLESS_REALITY_LINK)!;
+    expect(p).toMatchObject({
+      name: "🇭🇰-Reality",
+      type: "vless",
+      server: "derp.example.com",
+      port: 8443,
+      uuid: "11111111-2222-4333-8444-555555555555",
+      flow: "xtls-rprx-vision",
+      tls: true,
+      servername: "www.microsoft.com",
+      "client-fingerprint": "chrome",
+    });
+    // tcp 不写入 network 字段（Clash 默认即 tcp）
+    expect(p.network).toBeUndefined();
+    expect(p["reality-opts"]).toEqual({
+      "public-key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "short-id": "0123456789abcdef",
+    });
+  });
+
+  it("TLS + ws 传输层解析", () => {
+    const p = parseShareLink(VLESS_TLS_WS_LINK)!;
+    expect(p).toMatchObject({
+      name: "vless-ws",
+      type: "vless",
+      network: "ws",
+      tls: true,
+      servername: "jp.example.com",
+    });
+    expect(p["ws-opts"]).toEqual({
+      path: "/vless",
+      headers: { Host: "cdn.example.com" },
+    });
+    expect(p["reality-opts"]).toBeUndefined();
+  });
+
+  it("grpc 参数", () => {
+    const p = parseShareLink(
+      "vless://uuid-1@grpc.example.com:443?security=tls&type=grpc&serviceName=svc&sni=g.example.com#g",
+    )!;
+    expect(p["grpc-opts"]).toEqual({ "grpc-service-name": "svc" });
+    expect(p.network).toBe("grpc");
+  });
+
+  it("无 security 时不开 tls", () => {
+    const p = parseShareLink("vless://uuid-1@h.com:80#bare")!;
+    expect(p.tls).toBeUndefined();
+    expect(p["reality-opts"]).toBeUndefined();
+  });
+
+  it("缺端口 / 缺 uuid 返回 null", () => {
+    expect(parseShareLink("vless://uuid@h.com#x")).toBeNull();
+    expect(parseShareLink("vless://@h.com:1#x")).toBeNull();
+  });
+});
+
 // ── 逆向 + 往返 ──────────────────────────────────────────────────
 
 describe("toShareLink 往返", () => {
@@ -183,6 +265,8 @@ describe("toShareLink 往返", () => {
     ["ss plugin", SS_PLUGIN],
     ["trojan", TROJAN_LINK],
     ["hysteria2", HY2_LINK],
+    ["vless reality", VLESS_REALITY_LINK],
+    ["vless ws", VLESS_TLS_WS_LINK],
   ];
 
   for (const [label, link] of cases) {
@@ -217,13 +301,20 @@ describe("toShareLink 往返", () => {
 
 describe("parseBase64Sub", () => {
   it("base64 包装的混合协议集合", () => {
-    const plain = [VMESS_LINK, SS_SIP002, TROJAN_LINK, HY2_LINK].join("\n");
+    const plain = [
+      VMESS_LINK,
+      SS_SIP002,
+      TROJAN_LINK,
+      HY2_LINK,
+      VLESS_REALITY_LINK,
+    ].join("\n");
     const r = parseBase64Sub(b64Encode(plain));
     expect(r.proxies.map((p) => p.type)).toEqual([
       "vmess",
       "ss",
       "trojan",
       "hysteria2",
+      "vless",
     ]);
     expect(r.skipped).toBe(0);
   });

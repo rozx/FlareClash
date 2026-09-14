@@ -15,7 +15,11 @@ export interface TokenRow {
 export interface SourceRow {
   id: number;
   name: string;
+  /** 源类型：'fetch'（URL 回源）| 'static'（手动节点，内容在 content） */
+  kind: "fetch" | "static";
   url: string;
+  /** static 源的节点内容（分享链接文本，每行一条）；fetch 源为 null */
+  content: string | null;
   prefix: string | null;
   format: string | null;
   cache_ttl: number;
@@ -92,19 +96,41 @@ export async function listSources(db: D1Database): Promise<SourceListRow[]> {
   return r.results;
 }
 
+/** URL 去重查询；排除编辑中的源，所有 D1 查询集中在仓储层。 */
+export async function findSourceByUrl(db: D1Database, url: string, excludeId = 0): Promise<{ id: number } | null> {
+  return db.prepare("SELECT id FROM sources WHERE kind = 'fetch' AND url = ? AND id != ?")
+    .bind(url, excludeId).first<{ id: number }>();
+}
+
 export async function createSource(
   db: D1Database,
-  data: { name: string; url: string; prefix: string | null; cacheTtl: number },
+  data: {
+    name: string;
+    url: string;
+    prefix: string | null;
+    cacheTtl: number;
+    kind?: "fetch" | "static";
+    content?: string | null;
+  },
 ): Promise<SourceRow> {
   const now = Date.now();
-  await db
+  const result = await db
     .prepare(
-      "INSERT INTO sources (name, url, prefix, cache_ttl, created_at) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO sources (name, kind, url, content, prefix, cache_ttl, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(data.name, data.url, data.prefix, data.cacheTtl, now)
+    .bind(
+      data.name,
+      data.kind ?? "fetch",
+      data.url,
+      data.content ?? null,
+      data.prefix,
+      data.cacheTtl,
+      now,
+    )
     .run();
   const row = await db
-    .prepare("SELECT * FROM sources WHERE rowid = last_insert_rowid()")
+    .prepare("SELECT * FROM sources WHERE id = ?")
+    .bind(result.meta.last_row_id)
     .first<SourceRow>();
   return row!;
 }
@@ -127,6 +153,8 @@ export async function updateSource(
     url?: string;
     prefix?: string | null;
     cacheTtl?: number;
+    content?: string | null;
+    kind?: "fetch" | "static";
   },
 ): Promise<SourceRow | null> {
   const sets: string[] = [];
@@ -138,10 +166,7 @@ export async function updateSource(
   if (fields.url !== undefined) {
     sets.push("url = ?");
     binds.push(fields.url);
-    // 改 URL：失效化健康状态，下次订阅请求重新回源
-    sets.push(
-      "last_fetch_at = NULL, last_fetch_status = NULL, last_fetch_error = NULL, format = NULL",
-    );
+
   }
   if (fields.prefix !== undefined) {
     sets.push("prefix = ?");
@@ -150,6 +175,20 @@ export async function updateSource(
   if (fields.cacheTtl !== undefined) {
     sets.push("cache_ttl = ?");
     binds.push(fields.cacheTtl);
+  }
+  if (fields.content !== undefined) {
+    // static 源改内容即时生效，无需缓存失效（static 不走 KV 缓存）
+    sets.push("content = ?");
+    binds.push(fields.content);
+  }
+  if (fields.kind !== undefined) {
+    sets.push("kind = ?");
+    binds.push(fields.kind);
+  }
+  if (fields.url !== undefined || fields.content !== undefined || fields.kind !== undefined) {
+    sets.push(
+      "last_fetch_at = NULL, last_fetch_status = NULL, last_fetch_error = NULL, format = NULL",
+    );
   }
   if (sets.length === 0) return getSource(db, id);
   await db
