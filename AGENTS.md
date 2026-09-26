@@ -28,7 +28,7 @@ public/admin/       管理页 SPA：无构建、原生 ES module、纯 DOM 构�
 tests/unit/         纯逻辑单测；tests/integration/ 走真实 D1/KV（vitest-pool-workers / miniflare）
 ```
 
-数据分片：**D1 存元数据**（sources / tokens / token_sources），**KV 存上游内容缓存**（`fc:src:<id>:data|dataAt|fetched` 三键）。
+数据分片：**D1 存元数据**（sources / tokens / token_sources / routing_config）与登录防爆破计数（login_attempts，禁止改用 KV：失败由攻击者驱动写入），**KV 存上游内容缓存**（`fc:src:<id>:data|dataAt|fetched` 三键）。
 
 ## 硬性约束（改代码前必读）
 

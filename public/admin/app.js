@@ -10,6 +10,17 @@ const app = document.getElementById("app");
 
 /** 部署版本（commit hash）：启动时从 /api/_ping 获取，页脚展示 */
 let APP_VERSION = "";
+/** 弱配置提示（/api/_ping warnings），主界面顶部警告条展示 */
+let APP_WARNINGS = [];
+
+/** 从 /api/_ping 响应体读取版本与配置提示 */
+function applyPing(data) {
+  if (typeof data.version === "string" && data.version)
+    APP_VERSION = data.version;
+  APP_WARNINGS = Array.isArray(data.warnings)
+    ? data.warnings.filter((w) => typeof w === "string")
+    : [];
+}
 
 // ── 工具 ────────────────────────────────────────────
 
@@ -125,10 +136,11 @@ function renderLogin() {
         if (res.ok) {
           // 登录成功后补取部署版本（页脚展示），再进主界面
           const r2 = await fetch("/api/_ping").catch(() => null);
-          const d = r2?.ok ? await r2.json().catch(() => ({})) : {};
-          if (typeof d.version === "string" && d.version)
-            APP_VERSION = d.version;
+          applyPing(r2?.ok ? await r2.json().catch(() => ({})) : {});
           renderMain();
+        } else if (res.status === 429) {
+          const secs = Number(res.headers.get("Retry-After")) || 60;
+          err.textContent = `尝试次数过多，请 ${Math.ceil(secs / 60)} 分钟后再试`;
         } else
           err.textContent =
             res.status === 401 ? "密码错误" : `登录失败（${res.status}）`;
@@ -180,6 +192,9 @@ function renderMain() {
           renderLogin();
         },
       }),
+    ),
+    ...APP_WARNINGS.map((w) =>
+      el("div", { class: "config-warning", role: "alert", text: `⚠ ${w}` }),
     ),
     el("main", { id: "page" }),
     el(
@@ -842,10 +857,8 @@ function tokenDialog(t, sources) {
 (async () => {
   const res = await fetch("/api/_ping").catch(() => null);
   if (res && res.ok) {
-    // 顺带取部署版本（未注入时后端返回 "dev"）供页脚展示
-    const data = await res.json().catch(() => ({}));
-    if (typeof data.version === "string" && data.version)
-      APP_VERSION = data.version;
+    // 顺带取部署版本（未注入时后端返回 "dev"）与弱配置提示
+    applyPing(await res.json().catch(() => ({})));
     renderMain();
   } else renderLogin();
 })();

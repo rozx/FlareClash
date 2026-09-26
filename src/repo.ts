@@ -414,3 +414,90 @@ export async function existingSourceIds(
     .all<{ id: number }>();
   return new Set(r.results.map((x) => x.id));
 }
+
+// ── 登录防爆破计数（login_attempts） ─────────────────
+
+export interface ReservedAttempt {
+  key: string;
+  attempts: number;
+  lockouts: number;
+}
+
+/** 给定键中仍在锁定期的最晚截止时间；未锁返回 0（只读）。 */
+export async function getLoginLockUntil(
+  db: D1Database,
+  keys: string[],
+  now: number,
+): Promise<number> {
+  const placeholders = keys.map(() => "?").join(",");
+  const row = await db
+    .prepare(
+      `SELECT MAX(locked_until) AS until FROM login_attempts WHERE key IN (${placeholders}) AND locked_until > ?`,
+    )
+    .bind(...keys, now)
+    .first<{ until: number | null }>();
+  return row?.until ?? 0;
+}
+
+/**
+ * 原子预占一次尝试额度（单语句 UPSERT，SET 右值均引用旧行）：
+ * 窗口过期则重开窗口；空闲超过 decayMs 则翻倍级数清零。
+ */
+export async function reserveLoginAttempts(
+  db: D1Database,
+  entries: { key: string; windowMs: number }[],
+  now: number,
+  decayMs: number,
+): Promise<ReservedAttempt[]> {
+  const stmt = db.prepare(
+    `INSERT INTO login_attempts (key, attempts, window_start, locked_until, lockouts)
+     VALUES (?1, 1, ?2, 0, 0)
+     ON CONFLICT(key) DO UPDATE SET
+       attempts = CASE WHEN ?2 - window_start >= ?3 THEN 1 ELSE attempts + 1 END,
+       window_start = CASE WHEN ?2 - window_start >= ?3 THEN ?2 ELSE window_start END,
+       lockouts = CASE WHEN ?2 - MAX(window_start, locked_until) >= ?4 THEN 0 ELSE lockouts END
+     RETURNING key, attempts, lockouts`,
+  );
+  const results = await db.batch<ReservedAttempt>(
+    entries.map((e) => stmt.bind(e.key, now, e.windowMs, decayMs)),
+  );
+  return results.map((r) => r.results[0]!);
+}
+
+/** 施加锁定；`locked_until <= now` 条件保证并发下只锁一次、不会连续翻倍。 */
+export async function lockLoginKeys(
+  db: D1Database,
+  entries: { key: string; durationMs: number }[],
+  now: number,
+): Promise<void> {
+  if (entries.length === 0) return;
+  const stmt = db.prepare(
+    `UPDATE login_attempts
+     SET lockouts = lockouts + 1, locked_until = ?2 + ?3, attempts = 0, window_start = ?2
+     WHERE key = ?1 AND locked_until <= ?2`,
+  );
+  await db.batch(entries.map((e) => stmt.bind(e.key, now, e.durationMs)));
+}
+
+/** 登录成功：清零该客户端计数，全局计数回退本次预占，并清理陈旧行。 */
+export async function clearLoginAttempts(
+  db: D1Database,
+  clientKey: string,
+  globalKey: string,
+  now: number,
+  decayMs: number,
+): Promise<void> {
+  await db.batch([
+    db.prepare("DELETE FROM login_attempts WHERE key = ?").bind(clientKey),
+    db
+      .prepare(
+        "UPDATE login_attempts SET attempts = MAX(attempts - 1, 0) WHERE key = ?",
+      )
+      .bind(globalKey),
+    db
+      .prepare(
+        "DELETE FROM login_attempts WHERE key != ? AND MAX(window_start, locked_until) < ?",
+      )
+      .bind(globalKey, now - decayMs),
+  ]);
+}

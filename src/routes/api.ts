@@ -3,6 +3,7 @@ import routing from "./routing";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import {
   loginDelay,
+  passwordMatches,
   SESSION_COOKIE,
   signSession,
   verifySession,
@@ -15,18 +16,33 @@ import {
 import { clearSourceCache, readSourceCache } from "../cache/kv";
 import { numVar, type Env } from "../env";
 import { detectFormat } from "../lib/detect";
+import {
+  clientKey,
+  configWarnings,
+  GLOBAL_KEY,
+  GLOBAL_POLICY,
+  IP_POLICY,
+  LOCKOUT_DECAY_MS,
+  lockDurationMs,
+  retryAfterSeconds,
+  type ThrottlePolicy,
+} from "../lib/login-throttle";
 import { parseSourceLocation } from "../lib/source-input";
 import {
+  clearLoginAttempts,
   createSource,
   createToken,
   deleteSource,
   deleteToken,
   existingSourceIds,
   findSourceByUrl,
+  getLoginLockUntil,
   getSource,
   getToken,
   listSources,
   listTokens,
+  lockLoginKeys,
+  reserveLoginAttempts,
   setSourceFormat,
   setTokenSources,
   updateSource,
@@ -53,26 +69,71 @@ api.use("*", async (c, next) => {
   return next();
 });
 
-// 登录态探测：管理页启动/登录后探测会话，顺带返回部署版本供页脚展示
+// 登录态探测：管理页启动/登录后探测会话，顺带返回部署版本（页脚）与弱配置提示（警告条）
 api.get("/_ping", (c) =>
   c.json({
     ok: true,
     version: typeof COMMIT_HASH === "undefined" ? "dev" : COMMIT_HASH,
+    warnings: configWarnings(c.env),
   }),
 );
 
 // ── 认证 ─────────────────────────────────────────────
 
+// 防爆破（design: admin-login-hardening）：读锁 → 原子预占额度 → 比对 → 施锁 / 清零。
+// 计数存 D1 不写 KV：失败由攻击者驱动，写 KV 会耗尽回源缓存的写额度。
 api.post("/login", async (c) => {
+  const db = c.env.DB;
+  const now = Date.now();
+  const ipKey = clientKey(c.req.header("CF-Connecting-IP"));
+  const policies: Record<string, ThrottlePolicy> = {
+    [ipKey]: IP_POLICY,
+    [GLOBAL_KEY]: GLOBAL_POLICY,
+  };
+  const keys = Object.keys(policies);
+  const tooMany = (lockedUntil: number) => {
+    const retryAfter = retryAfterSeconds(lockedUntil, now);
+    c.header("Retry-After", String(retryAfter));
+    return c.json({ error: "too many attempts", retryAfter }, 429);
+  };
+
+  // 锁定期内只读不写，也不比对密码
+  const lockedUntil = await getLoginLockUntil(db, keys, now);
+  if (lockedUntil) return tooMany(lockedUntil);
+
+  const reserved = await reserveLoginAttempts(
+    db,
+    keys.map((key) => ({ key, windowMs: policies[key]!.windowMs })),
+    now,
+    LOCKOUT_DECAY_MS,
+  );
+  const lockFor = (atLeast: (max: number) => number) =>
+    reserved
+      .filter((r) => r.attempts >= atLeast(policies[r.key]!.maxAttempts))
+      .map((r) => ({
+        key: r.key,
+        durationMs: lockDurationMs(r.lockouts, policies[r.key]!),
+      }));
+
+  // 并发突发中超出额度的请求：不比对密码，直接锁定
+  const over = lockFor((max) => max + 1);
+  if (over.length > 0) {
+    await lockLoginKeys(db, over, now);
+    return tooMany(await getLoginLockUntil(db, keys, now));
+  }
+
   const body =
     (await c.req.json<{ password?: string }>().catch(() => null)) ?? {};
   if (
     typeof body.password !== "string" ||
-    body.password !== c.env.ADMIN_PASSWORD
+    !(await passwordMatches(body.password, c.env.ADMIN_PASSWORD))
   ) {
+    await lockLoginKeys(db, lockFor((max) => max), now);
     await loginDelay();
     return c.json({ error: "invalid credentials" }, 401);
   }
+
+  await clearLoginAttempts(db, ipKey, GLOBAL_KEY, now, LOCKOUT_DECAY_MS);
   const session = await signSession({
     authSecret: c.env.AUTH_SECRET,
     adminPassword: c.env.ADMIN_PASSWORD,

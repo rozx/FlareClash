@@ -63,18 +63,36 @@ export async function verifySession(
   const now = opts.now ?? Date.now();
   if (Number(exp) < now) return false;
 
+  let sigBytes: Uint8Array;
+  try {
+    sigBytes = new Uint8Array(
+      atob(sig.replace(/-/g, "+").replace(/_/g, "/"))
+        .split("")
+        .map((c) => c.charCodeAt(0)),
+    );
+  } catch {
+    return false; // 畸形 base64：视为未认证而非抛 500
+  }
   const key = await deriveKey(opts.authSecret, opts.adminPassword);
-  const sigBytes = new Uint8Array(
-    atob(sig.replace(/-/g, "+").replace(/_/g, "/"))
-      .split("")
-      .map((c) => c.charCodeAt(0)),
-  );
   return crypto.subtle.verify(
     "HMAC",
     key,
     sigBytes,
     new TextEncoder().encode(exp),
   );
+}
+
+/** 常量时间比较密码：两侧先取 SHA-256 摘要，长度恒等后 timingSafeEqual。 */
+export async function passwordMatches(
+  input: string,
+  expected: string,
+): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(input)),
+    crypto.subtle.digest("SHA-256", enc.encode(expected)),
+  ]);
+  return crypto.subtle.timingSafeEqual(a, b);
 }
 
 /** 登录失败固定延迟（防时序侧信道与爆破节奏，design.md D5）。 */

@@ -17,6 +17,7 @@
 - **缓存与节流**：KV 同步缓存上游内容与用量元数据，回源频率受 `MIN_FETCH_INTERVAL` 硬性限制，仍保持每次成功回源 3 次 KV 写
 - **token 生命周期**：随机 43 字符 token、可选过期时间、即时禁用/启用、最后使用时间记录
 - **管理后台**：密码登录（HMAC 签名 cookie），源/token 增删改查与健康状态展示
+- **登录防爆破**：按 IP（IPv6 按 /64）与全局两级限流锁定，计数存 D1、不占 KV 额度；弱密码 / 缺 `AUTH_SECRET` 时后台顶部提示
 
 ## 部署（从零开始，约 5 分钟）
 
@@ -54,7 +55,7 @@ id = "<步骤 4 的 id>"                     # ← 替换
 
 ```bash
 # 6. 写入 secrets
-npx wrangler secret put ADMIN_PASSWORD   # 管理员登录密码
+npx wrangler secret put ADMIN_PASSWORD   # 管理员登录密码（建议 ≥16 位随机串）
 npx wrangler secret put AUTH_SECRET      # 会话签名密钥：openssl rand -hex 32
 
 # 7. 建表（D1 migrations）
@@ -120,12 +121,27 @@ Hiddify 的导出格式依据官方 v4.1.1 protobuf 定义与文件导入代码�
 
 详细格式与示例见 [分流 JSON 说明](config/README.md)。升级已有部署时，先应用 `0003_routing_config.sql` 再发布新版 Worker；此迁移不改旧数据或 KV。
 
+## 登录安全
+
+- 单 IP（IPv6 按 /64 归并）15 分钟内 5 次密码错误 → 锁定 15 分钟，重复触发逐次翻倍，最长 24 小时；登录成功清零
+- 全站 1 小时内累计 50 次失败 → 暂停所有密码登录 1 小时；**已登录的会话不受影响**
+- 锁定期间返回 429 + `Retry-After`，即使密码正确也拒绝；计数存 D1 表 `login_attempts`，不消耗 KV 写额度
+- 升级已有部署：先应用 `0004_login_attempts.sql`（`npm run db:migrate:remote`），再发布新版 Worker
+
+被攻击导致自己也登录不了时，可手动解锁：
+
+```bash
+npx wrangler d1 execute flareclash --remote --command "DELETE FROM login_attempts"
+```
+
+**可选加固**：在 Cloudflare Zero Trust 为 `/admin/*` 与 `/api/*` 配置 Cloudflare Access（免费 50 人内），登录接口对外不可达；`/sub/*` 须保持公开，否则客户端无法拉取订阅。
+
 ## 免费额度说明
 
 | 资源 | 免费额度 | 本服务消耗 |
 | --- | --- | --- |
 | Workers 请求 | 10 万/天 | 每次订阅/后台操作 1 次 |
-| D1 读写 | 500 万读 / 10 万写每天 | 每次订阅请求 ~十行级 |
+| D1 读写 | 500 万读 / 10 万写每天 | 每次订阅请求 ~十行级；登录失败 2~4 行写/次（全局锁封顶约 150 写/小时） |
 | KV 写 | **1000/天** | 回源成功 3 写/次（受 TTL 限制），失败 1 写/次（受节流限制） |
 | 静态资产 | 不计额度 | 管理页直接边缘分发 |
 
