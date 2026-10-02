@@ -316,7 +316,11 @@ function toHysteria2Link(p: Proxy): string {
 // ── vless ────────────────────────────────────────────────────────
 
 interface VlessOpts {
-  "reality-opts"?: { "public-key"?: string; "short-id"?: string };
+  "reality-opts"?: {
+    "public-key"?: string;
+    "short-id"?: string;
+    "support-x25519mlkem768"?: boolean;
+  };
 }
 
 function parseVless(link: string): Proxy | null {
@@ -375,7 +379,10 @@ function parseVless(link: string): Proxy | null {
     ...(insecure ? { "skip-cert-verify": true } : {}),
   };
   if (security === "reality") {
-    const reality: VlessOpts["reality-opts"] = {};
+    // Xray 26.9.8+ 要求混合密钥交换；Mihomo 需显式启用。
+    const reality: VlessOpts["reality-opts"] = {
+      "support-x25519mlkem768": true,
+    };
     if (pbk) reality["public-key"] = pbk;
     if (sid) reality["short-id"] = sid;
     proxy["reality-opts"] = reality;

@@ -230,6 +230,7 @@ describe("parseShareLink: vless", () => {
     expect(p["reality-opts"]).toEqual({
       "public-key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       "short-id": "0123456789abcdef",
+      "support-x25519mlkem768": true,
     });
   });
 
