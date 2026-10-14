@@ -392,17 +392,30 @@ dialog .footer {
  opacity: 1;
 }
 
-/* ── 分流设置：延续既有主题，窄屏纵向编辑 ───────────────── */
+/* ── 分流规则：延续既有主题；规则行为紧凑网格，窄屏改为分行 ───────── */
+.routing-page {
+ --c-proxy: var(--accent);
+ --c-direct: var(--ok);
+ --c-reject: var(--err);
+ --c-group: var(--warn);
+}
 .routing-page h1 {
  margin: 0;
  font-size: 22px;
 }
+.routing-page h3 {
+ margin: 0 0 6px;
+ font-size: 14px;
+}
 .routing-heading {
  display: flex;
- align-items: baseline;
+ align-items: center;
  justify-content: space-between;
  gap: 16px;
  margin-bottom: 16px;
+}
+.routing-heading p {
+ margin: 4px 0 0;
 }
 .routing-page .muted,
 .routing-note {
@@ -410,20 +423,188 @@ dialog .footer {
 }
 .routing-note {
  font-size: 13px;
+ margin: 6px 0;
  overflow-wrap: anywhere;
 }
 .routing-note.warning {
  color: var(--warn);
 }
-.routing-toolbar,
-.routing-row-actions {
+.routing-toolbar {
  display: flex;
  flex-wrap: wrap;
  gap: 8px;
  align-items: center;
 }
-.routing-save {
- margin-bottom: 24px;
+.routing-toolbar .field {
+ margin: 0;
+}
+
+/* 添加规则 */
+.routing-add textarea {
+ min-height: 64px;
+}
+.routing-add-controls {
+ display: grid;
+ grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto;
+ gap: 12px;
+ align-items: end;
+ margin-top: 10px;
+}
+.routing-add-controls .field {
+ margin: 0;
+}
+.routing-add .form-error:empty {
+ display: none;
+}
+
+/* 规则列表 */
+.rule-table {
+ display: flex;
+ flex-direction: column;
+ gap: 6px;
+ margin-top: 8px;
+}
+.rule-row {
+ display: grid;
+ grid-template-columns: 28px minmax(120px, 0.9fr) minmax(160px, 1.6fr) minmax(120px, 0.9fr) 104px;
+ gap: 8px;
+ align-items: center;
+ padding: 6px 8px 6px 10px;
+ border: 1px solid var(--border);
+ border-left: 3px solid var(--border);
+ border-radius: 8px;
+ background: var(--panel-2);
+ transition:
+  border-color 0.2s,
+  box-shadow 0.2s;
+}
+.rule-row.target-proxy {
+ border-left-color: var(--c-proxy);
+}
+.rule-row.target-direct {
+ border-left-color: var(--c-direct);
+}
+.rule-row.target-reject {
+ border-left-color: var(--c-reject);
+}
+.rule-row.target-group {
+ border-left-color: var(--c-group);
+}
+.rule-row.rule-head {
+ background: none;
+ border: none;
+ padding: 0 8px 0 13px;
+ color: var(--muted);
+ font-size: 12px;
+}
+.rule-row.rule-final {
+ margin-top: 6px;
+ border-style: dashed;
+ border-left-style: solid;
+}
+.rule-row.is-hit {
+ border-color: var(--accent);
+ box-shadow: 0 0 0 2px rgba(77, 141, 255, 0.35);
+}
+.rule-row select,
+.rule-row input[type="text"] {
+ padding: 6px 8px;
+ min-width: 0;
+}
+.rule-index {
+ color: var(--muted);
+ font-size: 12px;
+ text-align: center;
+ font-variant-numeric: tabular-nums;
+}
+.rule-value,
+.rule-final-label {
+ display: flex;
+ flex-direction: column;
+ min-width: 0;
+}
+.rule-final-label {
+ grid-column: 2 / 4;
+}
+.rule-hint {
+ color: var(--muted);
+ font-size: 11px;
+ line-height: 1.3;
+}
+.rule-hint:empty {
+ display: none;
+}
+.rule-actions {
+ display: flex;
+ gap: 4px;
+ justify-content: flex-end;
+}
+.rule-actions button {
+ padding: 4px 8px;
+}
+
+/* 测试网址 */
+.routing-inline {
+ display: flex;
+ gap: 8px;
+}
+.routing-inline input {
+ flex: 1;
+ min-width: 0;
+}
+.routing-preview {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 0 6px;
+ margin: 10px 0 0;
+}
+.routing-preview:empty {
+ display: none;
+}
+.routing-preview small {
+ flex-basis: 100%;
+ margin: 2px 0 0;
+}
+
+/* 可折叠的高级区块 */
+.routing-section > summary {
+ display: flex;
+ align-items: baseline;
+ gap: 10px;
+ cursor: pointer;
+ list-style: none;
+}
+.routing-section > summary::-webkit-details-marker {
+ display: none;
+}
+.routing-section > summary::before {
+ content: "▸";
+ color: var(--muted);
+ transition: transform 0.15s;
+}
+.routing-section[open] > summary::before {
+ transform: rotate(90deg);
+}
+.routing-section > summary h2 {
+ margin: 0;
+}
+.routing-section[open] > summary {
+ margin-bottom: 8px;
+}
+.routing-subsection {
+ padding: 12px 0;
+ border-top: 1px solid var(--border);
+}
+.routing-subsection:first-of-type {
+ border-top: none;
+}
+.routing-page details details {
+ margin-top: 10px;
+}
+.routing-page details details > summary {
+ cursor: pointer;
+ color: var(--muted);
+ font-size: 13px;
 }
 .routing-group {
  min-width: 0;
@@ -441,46 +622,27 @@ dialog .footer {
  grid-template-columns: 1fr 1fr;
  gap: 12px;
 }
+.routing-group-head .field {
+ margin: 0;
+}
+.routing-group-foot {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ gap: 12px;
+}
 .routing-sources {
  display: flex;
  flex-wrap: wrap;
  gap: 8px 20px;
- margin: 8px 0 12px;
+ margin: 4px 0 12px;
 }
 .routing-sources label {
  overflow-wrap: anywhere;
 }
-.routing-rule {
- display: grid;
- grid-template-columns: minmax(125px, 1fr) minmax(160px, 1.5fr) minmax(
-   120px,
-   1fr
-  ) auto;
- gap: 10px;
- align-items: end;
- padding: 12px 0;
- border-bottom: 1px solid var(--border);
-}
-.routing-rule .field {
- min-width: 0;
- margin-bottom: 0;
-}
-.routing-rule + button {
- margin-top: 12px;
-}
-.routing-final {
- margin-top: 20px;
- max-width: 400px;
-}
 .routing-json {
  min-height: 280px;
  margin: 12px 0;
-}
-.routing-page details {
- margin: 12px 0 20px;
-}
-.routing-page summary {
- cursor: pointer;
 }
 .routing-page input[type="file"] {
  max-width: 100%;
@@ -489,6 +651,39 @@ dialog .footer {
  outline: 2px solid var(--accent);
  outline-offset: 2px;
 }
+
+/* 底部固定区：页面级错误 + 未保存修改的保存栏 */
+.routing-dock {
+ position: sticky;
+ bottom: 0;
+ z-index: 5;
+ padding-bottom: 12px;
+}
+.routing-dock .form-error {
+ min-height: 0;
+}
+.routing-dock .form-error:not(:empty) {
+ padding: 8px 12px;
+ border-radius: 8px;
+ background: var(--panel);
+ border: 1px solid rgba(239, 91, 110, 0.5);
+ font-size: 13px;
+}
+.routing-savebar {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ gap: 12px;
+ padding: 10px 14px;
+ border: 1px solid var(--warn);
+ border-radius: var(--radius);
+ background: var(--panel);
+ box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.routing-savebar[hidden] {
+ display: none;
+}
+
 button:disabled {
  opacity: 0.5;
  cursor: not-allowed;
@@ -509,14 +704,57 @@ button:disabled {
   margin-left: auto;
  }
  .routing-heading {
-  display: block;
+  align-items: flex-start;
  }
- .routing-rule,
+ .routing-add-controls,
  .routing-group-head {
   grid-template-columns: 1fr;
  }
- .routing-rule {
-  gap: 8px;
+ .rule-row.rule-head {
+  display: none;
+ }
+ .rule-row {
+  position: relative;
+  grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+   "idx value value"
+   "idx type target";
+ }
+ .rule-index {
+  grid-area: idx;
+  align-self: start;
+  padding-top: 8px;
+ }
+ .rule-value,
+ .rule-final-label {
+  grid-area: value;
+ }
+ .rule-row > select:not([data-target]) {
+  grid-area: type;
+ }
+ .rule-row > select[data-target] {
+  grid-area: target;
+ }
+ /* 操作按钮浮在内容行右侧，内容输入框让出位置 */
+ .rule-actions {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+ }
+ .rule-row:not(.rule-final) .rule-value {
+  padding-right: 100px;
+ }
+ .rule-row.rule-final {
+  grid-template-areas:
+   "idx value value"
+   "idx target target";
+ }
+ .rule-row.rule-final .rule-actions {
+  display: none;
+ }
+ .routing-savebar {
+  flex-direction: column;
+  align-items: stretch;
  }
  .routing-toolbar button {
   flex: 1 1 auto;

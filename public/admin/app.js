@@ -233,6 +233,15 @@ function route() {
   const page = document.getElementById("page");
   if (!page) return;
   const r = location.hash.replace(/^#\/?/, "") || "sources";
+  // 当前页有未保存修改且用户取消离开：还原地址栏（replaceState 不触发 hashchange，不重绘）
+  if (page.dataset.route && page.dataset.route !== r) {
+    if (page._canLeave && !page._canLeave()) {
+      history.replaceState(null, "", `#/${page.dataset.route}`);
+      return;
+    }
+    page._canLeave = null;
+  }
+  page.dataset.route = r;
   for (const a of document.querySelectorAll("nav a")) {
     a.classList.toggle("active", a.dataset.route === r);
   }
