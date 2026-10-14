@@ -47,3 +47,17 @@ export function formatInterval(metadata) {
     ? `${interval} 小时`
     : "暂无";
 }
+
+/** 地区选项：与 src/lib/regions.ts 的 key/name 保持一致（单测校验） */
+export const REGION_OPTIONS = [
+  { value: "hk", label: "🇭🇰 香港" },
+  { value: "tw", label: "🇹🇼 台湾" },
+  { value: "jp", label: "🇯🇵 日本" },
+  { value: "sg", label: "🇸🇬 新加坡" },
+  { value: "us", label: "🇺🇸 美国" },
+  { value: "eu", label: "🇪🇺 欧洲" },
+];
+
+export function formatRegion(region) {
+  return REGION_OPTIONS.find((o) => o.value === region)?.label ?? "自动";
+}

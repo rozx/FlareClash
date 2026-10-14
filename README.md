@@ -11,6 +11,7 @@
 
 - **多源聚合**：token 关联多个源订阅，节点加源前缀去重后合并返回
 - **双格式自适应**：Clash/mihomo UA 收完整 Clash YAML（默认策略组 + 地区分组），其他客户端收 base64 分享链接；`?format=clash|base64` 可显式指定
+- **地区分组**：默认按节点名关键字（香港/HK、US 等）归组；节点名不含地区的源（常见于自建节点）可在源设置里指定地区，该源全部节点归入对应地区组
 - **上游格式探测**：Clash YAML 与 base64 分享链接（vmess/ss/trojan/hysteria2/vless）自动识别；VLESS 支持 Reality、TLS、TCP/WS/gRPC、IPv6 与 ALPN
 - **手动节点源**：直接粘贴分享链接（每行一条，也兼容 base64 或 Clash YAML），内容存 D1，不回源、不占 KV 读写额度；可与 URL 源混合绑定 token
 - **用量与到期透传**：采集并聚合上游 `subscription-userinfo`，Hiddify 可显示已用/总量/到期；管理后台按源展示用量

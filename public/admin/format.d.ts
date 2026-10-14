@@ -16,3 +16,6 @@ export function formatExpire(
 export function formatInterval(
   metadata: AdminSubscriptionMetadata | null,
 ): string;
+
+export const REGION_OPTIONS: { value: string; label: string }[];
+export function formatRegion(region: string | null | undefined): string;

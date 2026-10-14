@@ -4,6 +4,7 @@ import { aggregateWithSources } from "../lib/aggregate";
 import { buildClashConfig } from "../lib/clash-render";
 import { renderBase64Sub } from "../lib/base64-render";
 import { detectFormat } from "../lib/detect";
+import { isRegionKey, type RegionKey } from "../lib/regions";
 import {
   aggregateSubscriptionMetadata,
   renderSubscriptionMetadataHeaders,
@@ -133,7 +134,11 @@ async function serveSubscription(
   if (format === "clash") {
     try {
       const { config } = await getRoutingConfig(c.env.DB);
-      return c.body(buildClashConfig(proxies, config, members), 200, {
+      // 源指定地区（非法值视为未指定，规格「源级地区归属」）
+      const regions = new Map<number, RegionKey>();
+      for (const src of sources)
+        if (isRegionKey(src.region)) regions.set(src.id, src.region);
+      return c.body(buildClashConfig(proxies, config, members, regions), 200, {
         "Content-Type": "text/yaml; charset=utf-8",
         "Cache-Control": "no-store",
         ...metadataHeaders,

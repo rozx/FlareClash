@@ -1,4 +1,5 @@
 import { detectFormat } from "./detect";
+import { isRegionKey, REGIONS, type RegionKey } from "./regions";
 
 export interface SourceLocation {
   kind: "fetch" | "static";
@@ -33,4 +34,18 @@ export function parseSourceLocation(
     return { error: "url 必须是 http(s) 地址" };
   }
   return { kind, url: url.trim(), content: null };
+}
+
+/**
+ * 源地区校验：undefined → 不改动；null/空串 → 自动（NULL）；合法键 → 保存。
+ */
+export function parseSourceRegion(
+  value: unknown,
+): RegionKey | null | undefined | { error: string } {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (isRegionKey(value)) return value;
+  return {
+    error: `region 必须是 ${REGIONS.map((r) => r.key).join("/")} 之一或留空`,
+  };
 }

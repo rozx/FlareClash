@@ -87,3 +87,52 @@ describe("buildClashConfig", () => {
     expect(select.proxies).toEqual(["DIRECT"]);
   });
 });
+
+describe("buildClashConfig 源级地区归属", () => {
+  // 真实场景：两个自建源，香港源节点名不含任何地区关键字
+  const hk = ["[derp] VLESS Reality — migrated", "[derp] Hysteria2 — migrated"];
+  const us = ["[derp-us] US VLESS Reality", "[derp-us] US Hysteria2"];
+  const members = new Map([
+    [1, hk],
+    [2, us],
+  ]);
+  const groupsOf = (yaml: string) =>
+    new Map(parseConfig(yaml)["proxy-groups"]!.map((g) => [g.name, g]));
+
+  it("指定地区的源：节点名不含关键字也归入该地区组", () => {
+    const groups = groupsOf(
+      buildClashConfig(
+        [...hk, ...us].map(n),
+        undefined,
+        members,
+        new Map([[1, "hk"]]),
+      ),
+    );
+    expect(groups.get("🇭🇰 香港")!.proxies).toEqual(hk);
+    expect(groups.get("🇺🇸 美国")!.proxies).toEqual(us);
+    expect(groups.has("🌐 其余节点")).toBe(false);
+  });
+
+  it("指定地区优先于节点名正则", () => {
+    const names = ["[derp] US relay", "[derp] 普通"];
+    const groups = groupsOf(
+      buildClashConfig(
+        names.map(n),
+        undefined,
+        new Map([[1, names]]),
+        new Map([[1, "hk"]]),
+      ),
+    );
+    expect(groups.get("🇭🇰 香港")!.proxies).toEqual(names);
+    expect(groups.has("🇺🇸 美国")).toBe(false);
+  });
+
+  it("未指定地区时保持按节点名匹配", () => {
+    const groups = groupsOf(
+      buildClashConfig([...hk, ...us].map(n), undefined, members),
+    );
+    expect(groups.get("🇺🇸 美国")!.proxies).toEqual(us);
+    expect(groups.get("🌐 其余节点")!.proxies).toEqual(hk);
+    expect(groups.has("🇭🇰 香港")).toBe(false);
+  });
+});

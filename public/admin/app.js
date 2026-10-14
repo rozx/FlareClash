@@ -1,4 +1,10 @@
-import { formatExpire, formatInterval, formatUsage } from "./format.js";
+import {
+  formatExpire,
+  formatInterval,
+  formatRegion,
+  formatUsage,
+  REGION_OPTIONS,
+} from "./format.js";
 import { renderRoutingPage } from "./routing.js";
 
 /**
@@ -295,6 +301,7 @@ async function renderSourcesPage(page) {
           "名称",
           "格式",
           "节点前缀",
+          "地区",
           "健康状态",
           "用量（已用 / 总量）",
           "到期",
@@ -314,6 +321,7 @@ async function renderSourcesPage(page) {
           el("td", { text: s.name }),
           el("td", {}, s.format ? badge(s.format, "muted") : "—"),
           el("td", { text: s.prefix ?? "（源名）" }),
+          el("td", { text: formatRegion(s.region) }),
           sourceHealthCell(s),
           el("td", {
             class: "mono",
@@ -407,6 +415,22 @@ function sourceDialog(src) {
     name: "prefix",
     value: src?.prefix ?? "",
   });
+  const regionSel = el(
+    "select",
+    { name: "region" },
+    el("option", {
+      value: "",
+      text: "自动（按节点名识别）",
+      selected: !src?.region,
+    }),
+    ...REGION_OPTIONS.map((o) =>
+      el("option", {
+        value: o.value,
+        text: o.label,
+        selected: src?.region === o.value,
+      }),
+    ),
+  );
   const ttlIn = el("input", {
     type: "number",
     name: "cacheTtl",
@@ -459,6 +483,7 @@ function sourceDialog(src) {
           content:
             kindSel.value === "static" ? contentIn.value.trim() : undefined,
           prefix: prefixIn.value.trim() || null,
+          region: regionSel.value || null,
           cacheTtl: Number(ttlIn.value) || 1800,
         };
         try {
@@ -498,6 +523,7 @@ function sourceDialog(src) {
     urlField,
     contentField,
     field("节点名前缀（留空使用源名）", prefixIn),
+    field("地区分组（节点名不含地区时指定）", regionSel),
     ttlField,
     probeOut,
     err,

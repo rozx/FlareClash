@@ -27,7 +27,7 @@ import {
   retryAfterSeconds,
   type ThrottlePolicy,
 } from "../lib/login-throttle";
-import { parseSourceLocation } from "../lib/source-input";
+import { parseSourceLocation, parseSourceRegion } from "../lib/source-input";
 import {
   clearLoginAttempts,
   createSource,
@@ -232,6 +232,7 @@ api.post("/sources", async (c) => {
         url?: string;
         content?: string;
         prefix?: string;
+        region?: string | null;
         cacheTtl?: number;
         probe?: boolean;
       }>()
@@ -241,6 +242,9 @@ api.post("/sources", async (c) => {
   }
   const location = parseSourceLocation(body);
   if ("error" in location) return c.json({ error: location.error }, 400);
+  const region = parseSourceRegion(body.region);
+  if (region && typeof region === "object")
+    return c.json({ error: region.error }, 400);
   if (location.kind === "fetch") {
     const dup = await findSourceByUrl(c.env.DB, location.url);
     if (dup)
@@ -252,6 +256,7 @@ api.post("/sources", async (c) => {
     ...location,
     name: body.name.trim(),
     prefix: body.prefix?.trim() || null,
+    region: region ?? null,
     cacheTtl: numVar(String(body.cacheTtl ?? 1800), 1800),
   });
 
@@ -281,11 +286,15 @@ api.patch("/sources/:id", async (c) => {
         url?: string;
         content?: string;
         prefix?: string | null;
+        region?: string | null;
         cacheTtl?: number;
       }>()
       .catch(() => null)) ?? {};
   const location = parseSourceLocation(body, src);
   if ("error" in location) return c.json({ error: location.error }, 400);
+  const region = parseSourceRegion(body.region);
+  if (region && typeof region === "object")
+    return c.json({ error: region.error }, 400);
   if (body.prefix != null && typeof body.prefix !== "string")
     return c.json({ error: "prefix 必须是字符串" }, 400);
   const kindChanged = location.kind !== src.kind;
@@ -305,6 +314,7 @@ api.patch("/sources/:id", async (c) => {
         ? body.name.trim()
         : undefined,
     prefix: body.prefix === undefined ? undefined : body.prefix?.trim() || null,
+    region,
     cacheTtl:
       body.cacheTtl === undefined
         ? undefined

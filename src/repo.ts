@@ -7,6 +7,7 @@ import {
   parseRoutingConfig,
   type RoutingConfig,
 } from "./lib/routing";
+import type { RegionKey } from "./lib/regions";
 
 export async function getRoutingConfig(
   db: D1Database,
@@ -59,6 +60,8 @@ export interface SourceRow {
   /** static 源的节点内容（分享链接文本，每行一条）；fetch 源为 null */
   content: string | null;
   prefix: string | null;
+  /** 指定地区键（lib/regions）；NULL = 按节点名自动识别 */
+  region: string | null;
   format: string | null;
   cache_ttl: number;
   last_fetch_at: number | null;
@@ -154,6 +157,7 @@ export async function createSource(
     name: string;
     url: string;
     prefix: string | null;
+    region?: RegionKey | null;
     cacheTtl: number;
     kind?: "fetch" | "static";
     content?: string | null;
@@ -162,7 +166,7 @@ export async function createSource(
   const now = Date.now();
   const result = await db
     .prepare(
-      "INSERT INTO sources (name, kind, url, content, prefix, cache_ttl, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO sources (name, kind, url, content, prefix, region, cache_ttl, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       data.name,
@@ -170,6 +174,7 @@ export async function createSource(
       data.url,
       data.content ?? null,
       data.prefix,
+      data.region ?? null,
       data.cacheTtl,
       now,
     )
@@ -198,6 +203,7 @@ export async function updateSource(
     name?: string;
     url?: string;
     prefix?: string | null;
+    region?: RegionKey | null;
     cacheTtl?: number;
     content?: string | null;
     kind?: "fetch" | "static";
@@ -216,6 +222,11 @@ export async function updateSource(
   if (fields.prefix !== undefined) {
     sets.push("prefix = ?");
     binds.push(fields.prefix);
+  }
+  if (fields.region !== undefined) {
+    // 地区只影响渲染：不重置健康状态，不清缓存
+    sets.push("region = ?");
+    binds.push(fields.region);
   }
   if (fields.cacheTtl !== undefined) {
     sets.push("cache_ttl = ?");

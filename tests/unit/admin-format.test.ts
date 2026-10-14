@@ -3,8 +3,11 @@ import {
   formatBytes,
   formatExpire,
   formatInterval,
+  formatRegion,
   formatUsage,
+  REGION_OPTIONS,
 } from "../../public/admin/format.js";
+import { REGIONS } from "../../src/lib/regions";
 
 describe("管理页订阅用量格式化", () => {
   it("字节转换为人类可读 IEC 单位", () => {
@@ -36,5 +39,19 @@ describe("管理页订阅用量格式化", () => {
   it("更新间隔显示小时", () => {
     expect(formatInterval({ profileUpdateInterval: 24 })).toBe("24 小时");
     expect(formatInterval(null)).toBe("暂无");
+  });
+});
+
+describe("管理页地区选项", () => {
+  it("与后端地区定义一致（键与显示名）", () => {
+    expect(REGION_OPTIONS).toEqual(
+      REGIONS.map((r) => ({ value: r.key, label: r.name })),
+    );
+  });
+
+  it("未指定或未知地区显示「自动」", () => {
+    expect(formatRegion(null)).toBe("自动");
+    expect(formatRegion("mars")).toBe("自动");
+    expect(formatRegion("hk")).toBe("🇭🇰 香港");
   });
 });

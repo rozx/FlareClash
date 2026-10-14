@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 
 /**
- * 测试用 schema：与 migrations/（0001 ~ 0004）保持一致。
+ * 测试用 schema：与 migrations/（0001 ~ 0005）保持一致。
  * 注意：D1 exec() 对语句内 `--` 注释解析有缺陷，此处必须无注释。
  * migrations 目录由 wrangler 管理（生产/本地 dev），
  * 集成测试通过 ensureSchema() 直接应用本文件。
@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS sources (
   url TEXT NOT NULL,
   content TEXT,
   prefix TEXT,
+  region TEXT,
   format TEXT,
   cache_ttl INTEGER NOT NULL DEFAULT 1800,
   last_fetch_at INTEGER,

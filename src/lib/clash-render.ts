@@ -1,4 +1,5 @@
 import { stringify as stringifyYaml } from "yaml";
+import { REGIONS, type RegionKey } from "./regions";
 import type { Proxy } from "./types";
 import {
   clashRules,
@@ -6,19 +7,6 @@ import {
   groupTag,
   type RoutingConfig,
 } from "./routing";
-
-/** 地区分组：按节点名正则匹配（design.md：HK/TW/JP/SG/US/EU 起步） */
-const REGION_GROUPS: { name: string; re: RegExp }[] = [
-  { name: "🇭🇰 香港", re: /(香港|🇭🇰|\bHK\b|Hong ?Kong)/i },
-  { name: "🇹🇼 台湾", re: /(台湾|臺灣|🇹🇼|\bTW\b|Taiwan)/i },
-  { name: "🇯🇵 日本", re: /(日本|🇯🇵|\bJP\b|Japan)/i },
-  { name: "🇸🇬 新加坡", re: /(新加坡|狮城|🇸🇬|\bSG\b|Singapore)/i },
-  { name: "🇺🇸 美国", re: /(美国|🇺🇸|\bUS\b|United States|America)/i },
-  {
-    name: "🇪🇺 欧洲",
-    re: /(英国|德国|法国|荷兰|欧洲|🇬🇧|🇩🇪|🇫🇷|🇳🇱|\bEU\b|Europe|UK|United Kingdom|Germany|France)/i,
-  },
-];
 
 const AUTO_GROUP = "♻️ 自动选择";
 const OTHER_GROUP = "🌐 其余节点";
@@ -39,11 +27,15 @@ interface ProxyGroup {
  * 渲染完整 Clash 配置：proxies + 默认策略组（自动选择 / 地区分组 /
  * 其余节点 / 节点选择）+ 默认规则集（规格 subscription-serving
  * 「按客户端自适应输出」）。
+ *
+ * sourceRegions：源 id → 管理员指定的地区。指定地区的源，其节点只进该地区组，
+ * 不再按节点名匹配（规格「源级地区归属」）；归属取自 sourceMembers 的真实去重记录。
  */
 export function buildClashConfig(
   proxies: Proxy[],
   config: RoutingConfig = defaultRoutingConfig(),
   sourceMembers: Map<number, string[]> = new Map(),
+  sourceRegions: Map<number, RegionKey> = new Map(),
 ): string {
   const names = proxies.map((p) => p.name);
 
@@ -59,10 +51,17 @@ export function buildClashConfig(
     });
   }
 
+  const assigned = new Map<string, RegionKey>();
+  for (const [id, key] of sourceRegions)
+    for (const m of sourceMembers.get(id) ?? []) assigned.set(m, key);
+
   const matched = new Set<string>();
   const regionGroupNames: string[] = [];
-  for (const region of REGION_GROUPS) {
-    const members = names.filter((n) => region.re.test(n));
+  for (const region of REGIONS) {
+    const members = names.filter((n) => {
+      const key = assigned.get(n);
+      return key ? key === region.key : region.re.test(n);
+    });
     if (members.length === 0) continue;
     for (const m of members) matched.add(m);
     regionGroupNames.push(region.name);
