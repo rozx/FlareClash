@@ -302,3 +302,55 @@ describe("网站分流配置", () => {
     }
   });
 });
+
+describe("远程规则集与地区去向", () => {
+  it("GET 返回规则集目录；未知规则集与地区拒绝保存", async () => {
+    const got = (await (await req("/api/routing")).json()) as any;
+    expect(got.rulesets.map((r: any) => r.id)).toContain("reject");
+    expect(got.rulesets[0]).toMatchObject({
+      id: expect.any(String),
+      name: expect.any(String),
+      description: expect.any(String),
+      suggested: expect.any(String),
+    });
+    for (const rule of [
+      { type: "RULE-SET", value: "nope", target: "REJECT" },
+      { type: "DOMAIN", value: "a.com", target: "region:mars" },
+    ]) {
+      const r = await req("/api/routing", "PUT", { ...basic, rules: [rule] });
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it("订阅输出 rule-providers；没有该地区节点的去向回退节点选择，订阅不失败", async () => {
+    const hk = await source("自建", "a.example.com"); // 节点名「香港」→ 只有香港地区组
+    const key = await token([hk]);
+    const config = {
+      ...basic,
+      rules: [
+        { type: "RULE-SET", value: "reject", target: "REJECT", note: "广告" },
+        { type: "DOMAIN-SUFFIX", value: "openai.com", target: "region:us" },
+        { type: "DOMAIN-SUFFIX", value: "example.org", target: "region:hk" },
+      ],
+    };
+    expect((await req("/api/routing", "PUT", config)).status).toBe(200);
+    const res = await req(`/sub/clash/${key}`, "GET", undefined, false);
+    expect(res.status).toBe(200);
+    const doc = parseYaml(await res.text());
+    expect(doc["rule-providers"]).toEqual({
+      reject: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt",
+        path: "./ruleset/reject.yaml",
+        interval: 86400,
+      },
+    });
+    expect(doc.rules).toEqual([
+      "RULE-SET,reject,REJECT",
+      "DOMAIN-SUFFIX,openai.com,🚀 节点选择",
+      "DOMAIN-SUFFIX,example.org,🇭🇰 香港",
+      "MATCH,🚀 节点选择",
+    ]);
+  });
+});

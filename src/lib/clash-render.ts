@@ -5,6 +5,7 @@ import {
   clashRules,
   defaultRoutingConfig,
   groupTag,
+  ruleProviders,
   type RoutingConfig,
 } from "./routing";
 
@@ -57,6 +58,7 @@ export function buildClashConfig(
 
   const matched = new Set<string>();
   const regionGroupNames: string[] = [];
+  const regionKeys = new Set<string>();
   for (const region of REGIONS) {
     const members = names.filter((n) => {
       const key = assigned.get(n);
@@ -65,6 +67,7 @@ export function buildClashConfig(
     if (members.length === 0) continue;
     for (const m of members) matched.add(m);
     regionGroupNames.push(region.name);
+    regionKeys.add(region.key);
     groups.push({
       name: region.name,
       type: "url-test",
@@ -123,10 +126,16 @@ export function buildClashConfig(
     ],
   });
 
-  const rules = clashRules(config);
+  const rules = clashRules(config, regionKeys);
+  const providers = ruleProviders(config);
 
   return stringifyYaml(
-    { proxies, "proxy-groups": groups, rules },
+    {
+      proxies,
+      "proxy-groups": groups,
+      ...(Object.keys(providers).length ? { "rule-providers": providers } : {}),
+      rules,
+    },
     { lineWidth: 0 },
   );
 }

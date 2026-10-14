@@ -15,6 +15,7 @@ import {
   previewDomain,
   type RoutingConfig,
 } from "../lib/routing";
+import { RULESETS } from "../lib/rulesets";
 
 // 由 /api 的认证中间件统一保护，不单独暴露未认证路由。
 const routing = new Hono<{ Bindings: Env }>();
@@ -43,6 +44,8 @@ routing.get("/", async (c) =>
   c.json({
     ...(await getRoutingConfig(c.env.DB)),
     defaults: defaultRoutingConfig(),
+    // 规则集目录供管理页展示（公开信息，不含 URL 以外的任何凭据）
+    rulesets: RULESETS,
   }),
 );
 routing.put("/", async (c) => {

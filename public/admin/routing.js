@@ -1,4 +1,6 @@
 /** 网站分流编辑器：纯 DOM；草稿只在明确保存后写入 D1。 */
+import { REGION_OPTIONS } from "./format.js";
+import { TEMPLATES } from "./templates.js";
 
 const RULE_TYPES = [
   ["DOMAIN-SUFFIX", "域名及子域名"],
@@ -7,6 +9,7 @@ const RULE_TYPES = [
   ["IP-CIDR", "IPv4 段"],
   ["IP-CIDR6", "IPv6 段"],
   ["GEOIP", "国家/地区 IP"],
+  ["RULE-SET", "远程规则集"],
 ];
 const ADD_MODES = [
   ["auto", "自动识别"],
@@ -91,8 +94,17 @@ export function parseEntries(text, mode) {
     });
 }
 
+const BASIC_TARGETS = ["PROXY", "DIRECT", "REJECT"];
 const targetKind = (t) =>
-  t === "PROXY" ? "proxy" : t === "DIRECT" ? "direct" : t === "REJECT" ? "reject" : "group";
+  t === "PROXY"
+    ? "proxy"
+    : t === "DIRECT"
+      ? "direct"
+      : t === "REJECT"
+        ? "reject"
+        : t.startsWith("region:")
+          ? "region"
+          : "group";
 
 export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
   page.replaceChildren(el("p", { class: "empty", text: "正在读取分流配置…" }));
@@ -124,9 +136,14 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
     addMode: "auto",
     addTarget: "PROXY",
     previewText: "",
+    addTab: "manual",
+    templateSel: new Set(),
+    templateTarget: "PROXY",
+    rulesetSel: new Map(), // 规则集 ID → 去向
     groupsOpen: draft.groups.length > 0,
     advancedOpen: false,
   };
+  const rulesets = loaded.rulesets ?? [];
   let status, pageError, addError, saveBar, compatibility;
 
   // 站内切页 / 关闭页面前确认未保存修改（app.js route() 调用 _canLeave）
@@ -139,18 +156,43 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
     }
   };
 
+  // 去向下拉：基本 / 地区 / 节点组（optgroup）
   const targetOptions = () => [
     ["PROXY", "代理"],
     ["DIRECT", "直连"],
     ["REJECT", "拦截"],
-    ...draft.groups.map((g) => [g.id, `📂 ${g.name || "未命名节点组"}`]),
+    {
+      label: "地区（没有该地区节点时走代理）",
+      options: REGION_OPTIONS.map((o) => [`region:${o.value}`, o.label]),
+    },
+    ...(draft.groups.length
+      ? [
+          {
+            label: "节点组",
+            options: draft.groups.map((g) => [g.id, `📂 ${g.name || "未命名节点组"}`]),
+          },
+        ]
+      : []),
   ];
-  const targetLabel = (id) => targetOptions().find(([v]) => v === id)?.[1] ?? id;
+  const targetLabel = (id) =>
+    targetOptions()
+      .flatMap((o) => (Array.isArray(o) ? [o] : o.options))
+      .find(([v]) => v === id)?.[1] ?? id;
+  const optionNodes = (options) =>
+    options.map((o) =>
+      Array.isArray(o)
+        ? el("option", { value: o[0], text: o[1] })
+        : el(
+            "optgroup",
+            { label: o.label },
+            ...o.options.map(([v, name]) => el("option", { value: v, text: name })),
+          ),
+    );
   function select(options, value, onChange, label) {
     const input = el(
       "select",
       { "aria-label": label, onchange: (e) => onChange(e.target.value) },
-      ...options.map(([v, name]) => el("option", { value: v, text: name })),
+      ...optionNodes(options),
     );
     input.value = value;
     return input;
@@ -163,9 +205,7 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
   function refreshTargets() {
     for (const input of page.querySelectorAll("select[data-target]")) {
       const value = input.value;
-      input.replaceChildren(
-        ...targetOptions().map(([v, name]) => el("option", { value: v, text: name })),
-      );
+      input.replaceChildren(...optionNodes(targetOptions()));
       input.value = value;
     }
   }
@@ -180,15 +220,28 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
   const btn = (text, fn, attrs = {}) =>
     el("button", { type: "button", text, onclick: fn, ...attrs });
 
+  /** Hiddify 不兼容项，按原因分组并合并序号区间：「去向是地区（第 2–6 条）」。 */
   function issues() {
-    const messages = [];
+    const byReason = new Map();
+    const add = (reason, n) => byReason.set(reason, [...(byReason.get(reason) ?? []), n]);
+    const why = (t) => (t.startsWith("region:") ? "去向是地区" : "去向是节点组");
     draft.rules.forEach((r, i) => {
-      if (r.type === "GEOIP") messages.push(`第 ${i + 1} 条（国家/地区 IP）`);
-      if (!["PROXY", "DIRECT", "REJECT"].includes(r.target))
-        messages.push(`第 ${i + 1} 条（去向是节点组）`);
+      if (r.type === "GEOIP") add("国家/地区 IP", i + 1);
+      if (r.type === "RULE-SET") add("远程规则集", i + 1);
+      if (!BASIC_TARGETS.includes(r.target)) add(why(r.target), i + 1);
     });
-    if (!["PROXY", "DIRECT", "REJECT"].includes(draft.final))
-      messages.push("兜底（去向是节点组）");
+    const ranges = (nums) =>
+      nums
+        .reduce((acc, n) => {
+          const last = acc.at(-1);
+          if (last && n === last[1] + 1) last[1] = n;
+          else acc.push([n, n]);
+          return acc;
+        }, [])
+        .map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`))
+        .join("、");
+    const messages = [...byReason].map(([reason, nums]) => `${reason}（第 ${ranges(nums)} 条）`);
+    if (!BASIC_TARGETS.includes(draft.final)) messages.push(`兜底${why(draft.final)}`);
     return messages;
   }
   function updateStatus() {
@@ -204,7 +257,7 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
     saveBar.hidden = !dirty;
     const warnings = issues();
     compatibility.textContent = warnings.length
-      ? `暂不能导出：${warnings.join("、")} Hiddify 不支持。需要先调整这些规则，导出不会自动删除或改写它们。`
+      ? `暂不能导出，Hiddify 不支持：${warnings.join("；")}。需要先调整这些规则，导出不会自动删除或改写它们。`
       : "当前规则都能导出为 Hiddify 原生规则。";
     compatibility.className = warnings.length ? "routing-note warning" : "routing-note";
   }
@@ -252,35 +305,29 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
       body: JSON.stringify(config),
     });
 
-  /** 批量添加：新规则插到最前，先经服务端校验，错误映射回输入项。 */
-  function addRules() {
-    const entries = parseEntries(ui.addText, ui.addMode);
-    if (!entries.length) {
-      addError.textContent = "请先输入要添加的网址、域名或 IP 段";
-      return;
-    }
-    if (draft.rules.length + entries.length > 256) {
+  const has = (type, value) => draft.rules.some((r) => r.type === type && r.value === value);
+
+  /**
+   * 插入新规则到最前：先经服务端校验，错误按 labels 映射回输入项；
+   * 与已有规则或本批重复的跳过。onDone 在成功后清理对应输入状态。
+   */
+  function insertRules(newRules, labels, onDone) {
+    if (draft.rules.length + newRules.length > 256) {
       addError.textContent = `规则最多 256 条，当前已有 ${draft.rules.length} 条`;
       return;
     }
     action(async () => {
-      const n = entries.length;
+      const n = newRules.length;
       let result;
       try {
-        result = await validate({
-          ...draft,
-          rules: [
-            ...entries.map(({ type, value }) => ({ type, value, target: ui.addTarget })),
-            ...draft.rules,
-          ],
-        });
+        result = await validate({ ...draft, rules: [...newRules, ...draft.rules] });
       } catch (e) {
         const m = e.message.match(/^第 (\d+) 条规则：(.*)$/);
         if (!m) throw e;
         const idx = Number(m[1]);
         throw new Error(
           idx <= n
-            ? `「${entries[idx - 1].raw}」：${m[2]}`
+            ? `「${labels[idx - 1]}」：${m[2]}`
             : `列表中第 ${idx - n} 条规则有误，请先修正：${m[2]}`,
         );
       }
@@ -295,7 +342,7 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
       });
       draft = { ...result.config, rules: [...added, ...existing] };
       const skipped = n - added.length;
-      ui.addText = "";
+      onDone();
       if (added.length) dirty = true;
       draw();
       toast(
@@ -306,7 +353,56 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
     }, addError);
   }
 
-  function addCard() {
+  function addRules() {
+    const entries = parseEntries(ui.addText, ui.addMode);
+    if (!entries.length) {
+      addError.textContent = "请先输入要添加的网址、域名或 IP 段";
+      return;
+    }
+    insertRules(
+      entries.map(({ type, value }) => ({ type, value, target: ui.addTarget })),
+      entries.map((e) => e.raw),
+      () => {
+        ui.addText = "";
+      },
+    );
+  }
+
+  function addTemplates() {
+    const picked = TEMPLATES.filter((t) => ui.templateSel.has(t.id));
+    if (!picked.length) {
+      addError.textContent = "请先勾选要添加的服务";
+      return;
+    }
+    const rules = picked.flatMap((t) =>
+      t.rules.map((r) => ({ ...r, target: ui.templateTarget, note: t.name })),
+    );
+    insertRules(
+      rules,
+      rules.map((r) => `${r.note}：${r.value}`),
+      () => ui.templateSel.clear(),
+    );
+  }
+
+  function addRulesets() {
+    const picked = rulesets.filter((s) => ui.rulesetSel.has(s.id));
+    if (!picked.length) {
+      addError.textContent = "请先勾选要添加的规则集";
+      return;
+    }
+    insertRules(
+      picked.map((s) => ({
+        type: "RULE-SET",
+        value: s.id,
+        target: ui.rulesetSel.get(s.id),
+        note: s.name,
+      })),
+      picked.map((s) => s.name),
+      () => ui.rulesetSel.clear(),
+    );
+  }
+
+  function manualPanel() {
     const input = el("textarea", {
       rows: 2,
       "aria-label": "要添加的网址、域名或 IP 段",
@@ -320,10 +416,7 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
     });
     input.value = ui.addText;
     const hint = el("p", { class: "routing-note", text: MODE_HINTS[ui.addMode] });
-    return el(
-      "section",
-      { class: "card routing-add" },
-      el("h2", { text: "添加规则" }),
+    return [
       input,
       el(
         "div",
@@ -353,6 +446,147 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
         btn("添加到最前", addRules, { class: "primary" }),
       ),
       hint,
+    ];
+  }
+
+  function templatesPanel() {
+    return [
+      el("p", {
+        class: "routing-note",
+        text: "勾选常用服务，一键生成它们的域名规则（自动带备注，之后可在列表里修改或删除）。",
+      }),
+      el(
+        "div",
+        { class: "preset-grid" },
+        ...TEMPLATES.map((t) => {
+          const added = t.rules.every((r) => has(r.type, r.value));
+          return el(
+            "label",
+            { class: `preset-card${added ? " is-added" : ""}` },
+            el("input", {
+              type: "checkbox",
+              checked: !added && ui.templateSel.has(t.id),
+              disabled: added,
+              onchange: (e) => {
+                if (e.target.checked) ui.templateSel.add(t.id);
+                else ui.templateSel.delete(t.id);
+              },
+            }),
+            el(
+              "span",
+              { class: "preset-text" },
+              el("strong", { text: t.name }),
+              el("small", {
+                text: added
+                  ? "已添加"
+                  : `${t.rules.length} 条 · 建议${targetLabel(t.suggested)}`,
+              }),
+            ),
+          );
+        }),
+      ),
+      el(
+        "div",
+        { class: "routing-add-controls" },
+        field(
+          "去向",
+          target(
+            ui.templateTarget,
+            (v) => {
+              ui.templateTarget = v;
+            },
+            "模板去向",
+          ),
+        ),
+        el("span", {}),
+        btn("添加所选服务", addTemplates, { class: "primary" }),
+      ),
+    ];
+  }
+
+  function rulesetsPanel() {
+    return [
+      el("p", {
+        class: "routing-note",
+        text: "引用社区维护的规则列表（Loyalsoldier/clash-rules，每天更新）。由 Clash 客户端自己下载，不经过本服务、不占额度；Hiddify 无法导入。",
+      }),
+      el(
+        "div",
+        { class: "preset-list" },
+        ...rulesets.map((s) => {
+          const added = has("RULE-SET", s.id);
+          const checked = !added && ui.rulesetSel.has(s.id);
+          const pick = target(
+            ui.rulesetSel.get(s.id) ?? s.suggested,
+            (v) => {
+              if (ui.rulesetSel.has(s.id)) ui.rulesetSel.set(s.id, v);
+            },
+            `${s.name} 去向`,
+          );
+          return el(
+            "div",
+            { class: `preset-row${added ? " is-added" : ""}` },
+            el(
+              "label",
+              { class: "preset-text" },
+              el("input", {
+                type: "checkbox",
+                checked,
+                disabled: added,
+                onchange: (e) => {
+                  if (e.target.checked) ui.rulesetSel.set(s.id, pick.value);
+                  else ui.rulesetSel.delete(s.id);
+                },
+              }),
+              el(
+                "span",
+                {},
+                el("strong", { text: s.name }),
+                el("small", { text: added ? "已添加" : s.description }),
+              ),
+            ),
+            added ? el("span", {}) : pick,
+          );
+        }),
+      ),
+      el(
+        "div",
+        { class: "routing-toolbar routing-add-submit" },
+        btn("添加所选规则集", addRulesets, { class: "primary" }),
+      ),
+    ];
+  }
+
+  function addCard() {
+    const tabs = [
+      ["manual", "手动输入", manualPanel],
+      ["templates", "常用服务", templatesPanel],
+      ["rulesets", "远程规则集", rulesetsPanel],
+    ];
+    const current = tabs.find(([id]) => id === ui.addTab) ?? tabs[0];
+    return el(
+      "section",
+      { class: "card routing-add" },
+      el("h2", { text: "添加规则" }),
+      el(
+        "div",
+        { class: "routing-tabs", role: "tablist", "aria-label": "添加方式" },
+        ...tabs.map(([id, label]) =>
+          el("button", {
+            type: "button",
+            role: "tab",
+            text: label,
+            "aria-label": label,
+            "aria-selected": String(id === current[0]),
+            class: id === current[0] ? "is-active" : "",
+            onclick: () => {
+              ui.addTab = id;
+              draw(label);
+            },
+          }),
+        ),
+      ),
+      el("div", { role: "tabpanel" }, ...current[2]()),
       addError,
     );
   }
@@ -363,19 +597,43 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
       role: "listitem",
       "data-index": String(i),
     });
-    const hint = el("small", { class: "rule-hint", text: ruleHint(r) });
-    const value = el("input", {
+    const notePlaceholder = () => ruleHint(r) || "备注（可选）";
+    const note = el("input", {
       type: "text",
-      value: r.value,
-      maxlength: 253,
-      placeholder: PLACEHOLDERS[r.type],
-      "aria-label": `规则 ${i + 1} 内容`,
+      class: "rule-note",
+      value: r.note ?? "",
+      maxlength: 64,
+      placeholder: notePlaceholder(),
+      "aria-label": `规则 ${i + 1} 备注`,
       oninput: (e) => {
-        r.value = e.target.value;
-        hint.textContent = ruleHint(r);
+        if (e.target.value.trim()) r.note = e.target.value;
+        else delete r.note;
         changed();
       },
     });
+    const value =
+      r.type === "RULE-SET"
+        ? select(
+            rulesets.map((s) => [s.id, s.name]),
+            r.value,
+            (v) => {
+              r.value = v;
+              changed();
+            },
+            `规则 ${i + 1} 内容`,
+          )
+        : el("input", {
+            type: "text",
+            value: r.value,
+            maxlength: 253,
+            placeholder: PLACEHOLDERS[r.type],
+            "aria-label": `规则 ${i + 1} 内容`,
+            oninput: (e) => {
+              r.value = e.target.value;
+              note.placeholder = notePlaceholder();
+              changed();
+            },
+          });
     const move = (to) => {
       [draft.rules[to], draft.rules[i]] = [draft.rules[i], draft.rules[to]];
       dirty = true;
@@ -387,14 +645,22 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
         RULE_TYPES,
         r.type,
         (v) => {
+          const wasSet = r.type === "RULE-SET";
           r.type = v;
+          dirty = true;
+          // 规则集的内容是下拉，切换进出时重绘该行
+          if (v === "RULE-SET" || wasSet) {
+            r.value = v === "RULE-SET" ? (rulesets[0]?.id ?? "") : "";
+            draw(`规则 ${i + 1} 类型`);
+            return;
+          }
           value.placeholder = PLACEHOLDERS[v];
-          hint.textContent = ruleHint(r);
+          note.placeholder = notePlaceholder();
           changed();
         },
         `规则 ${i + 1} 类型`,
       ),
-      el("div", { class: "rule-value" }, value, hint),
+      el("div", { class: "rule-value" }, value, note),
       target(
         r.target,
         (v) => {
@@ -530,7 +796,7 @@ export async function renderRoutingPage(page, { el, apiJson, field, toast }) {
           el("small", {
             class: "routing-note",
             text: r.uncertain
-              ? "只按域名规则判断，不做 DNS 解析；它前面还有 IP/国家规则，实际结果取决于解析出的 IP。"
+              ? "只按域名规则判断，不做 DNS 解析；它前面还有 IP/国家/规则集规则，实际结果可能不同。"
               : "只按域名规则判断，不做 DNS 解析。",
           }),
         );

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { RULESETS } from "../../src/lib/rulesets";
 let defaults: any;
 try {
   defaults = JSON.parse(
@@ -50,7 +51,12 @@ async function mockApi(page: Page) {
         state.config = structuredClone(defaults);
         state.origin = "default";
       }
-      return reply({ config: state.config, origin: state.origin, defaults });
+      return reply({
+        config: state.config,
+        origin: state.origin,
+        defaults,
+        rulesets: RULESETS,
+      });
     }
     if (path === "/api/routing/validate") {
       const config = route.request().postDataJSON();
@@ -202,5 +208,48 @@ test("分流规则：批量添加、测试网址、节点组、保存与离开�
   await page.getByRole("button", { name: "恢复默认", exact: true }).click();
   await expect(page.getByText("默认规则", { exact: true })).toBeVisible();
   expect(state.config).toEqual(defaults);
+  expect(errors).toEqual([]);
+});
+
+test("分流规则：常用服务、远程规则集、地区去向与备注", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const state = await mockApi(page);
+  await page.goto("/admin/#/routing");
+
+  // 常用服务 → 地区去向，规则自动带模板名备注
+  await page.getByRole("tab", { name: "常用服务" }).click();
+  await page.getByText("OpenAI / ChatGPT", { exact: true }).click();
+  await page.getByLabel("模板去向").selectOption("region:us");
+  await page.getByRole("button", { name: "添加所选服务" }).click();
+  await expect(page.getByLabel("规则 1 内容", { exact: true })).toHaveValue("openai.com");
+  await expect(page.getByLabel("规则 1 动作", { exact: true })).toHaveValue("region:us");
+  await expect(page.getByLabel("规则 1 备注", { exact: true })).toHaveValue("OpenAI / ChatGPT");
+  await expect(page.locator(".preset-card", { hasText: "OpenAI / ChatGPT" })).toContainText("已添加");
+
+  // 远程规则集：按建议去向插到最前，内容为规则集下拉
+  await page.getByRole("tab", { name: "远程规则集" }).click();
+  await page.getByText("广告与追踪", { exact: true }).click();
+  await page.getByRole("button", { name: "添加所选规则集" }).click();
+  await expect(page.getByLabel("规则 1 类型", { exact: true })).toHaveValue("RULE-SET");
+  await expect(page.getByLabel("规则 1 内容", { exact: true })).toHaveValue("reject");
+  await expect(page.getByLabel("规则 1 动作", { exact: true })).toHaveValue("REJECT");
+  await expect(page.locator(".preset-row", { hasText: "广告与追踪" })).toContainText("已添加");
+
+  // 备注可编辑；保存后写入配置
+  await page.getByLabel("规则 2 备注", { exact: true }).fill("ChatGPT 走美国");
+  await page.getByRole("button", { name: "保存配置" }).click();
+  await expect(page.getByText("已保存的自定义规则", { exact: true })).toBeVisible();
+  expect(state.config.rules.slice(0, 3)).toEqual([
+    { type: "RULE-SET", value: "reject", target: "REJECT", note: "广告与追踪" },
+    { type: "DOMAIN-SUFFIX", value: "openai.com", target: "region:us", note: "ChatGPT 走美国" },
+    { type: "DOMAIN-SUFFIX", value: "chatgpt.com", target: "region:us", note: "OpenAI / ChatGPT" },
+  ]);
+
+  // Hiddify 不兼容项按原因分组提示
+  await page.getByText("备份与导出", { exact: true }).click();
+  await expect(
+    page.getByText(/远程规则集（第 1 条）；去向是地区（第 2–6 条）；国家\/地区 IP（第 12 条）/),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });

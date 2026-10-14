@@ -1,4 +1,6 @@
 import defaults from "../../config/routing.default.json";
+import { isRegionKey, REGIONS } from "./regions";
+import { findRuleSet } from "./rulesets";
 
 export const RULE_TYPES = [
   "DOMAIN",
@@ -7,12 +9,16 @@ export const RULE_TYPES = [
   "IP-CIDR",
   "IP-CIDR6",
   "GEOIP",
+  "RULE-SET",
 ] as const;
 export type RuleType = (typeof RULE_TYPES)[number];
 export interface RoutingRule {
   type: RuleType;
   value: string;
+  /** PROXY / DIRECT / REJECT、节点组 ID（g_…）或地区去向（region:<key>） */
   target: string;
+  /** 管理用备注：不进 Clash 规则行，Hiddify 导出时作规则名 */
+  note?: string;
 }
 export interface RoutingGroup {
   id: string;
@@ -28,6 +34,9 @@ export interface RoutingConfig {
 }
 export const MAX_ROUTING_BYTES = 64 * 1024;
 const BUILTINS = ["DIRECT", "REJECT", "PROXY"];
+const REGION_PREFIX = "region:";
+export const regionOfTarget = (target: string) =>
+  target.startsWith(REGION_PREFIX) ? target.slice(REGION_PREFIX.length) : null;
 
 /** 只接受已知字段，避免导入配置时悄悄丢弃用户意图。 */
 function object(value: unknown, keys: string[]): Record<string, unknown> {
@@ -131,13 +140,24 @@ export function parseRoutingConfig(input: unknown): RoutingConfig {
     } as RoutingGroup;
   });
   const target = (v: unknown): string => {
-    if (typeof v !== "string" || !(BUILTINS.includes(v) || ids.has(v)))
+    if (
+      typeof v !== "string" ||
+      !(BUILTINS.includes(v) || ids.has(v) || isRegionKey(regionOfTarget(v)))
+    )
       throw new Error("规则目标不存在");
     return v;
   };
+  const note = (v: unknown): string | undefined => {
+    if (v === undefined) return undefined;
+    if (typeof v !== "string" || v.length > 256 || /[\x00-\x1f\x7f]/.test(v))
+      throw new Error("备注无效");
+    const trimmed = v.trim();
+    if (trimmed.length > 64) throw new Error("备注不能超过 64 个字符");
+    return trimmed || undefined;
+  };
   const rules = doc.rules.map((v, i) => {
     try {
-      const r = object(v, ["type", "value", "target"]);
+      const r = object(v, ["type", "value", "target", "note"]);
       if (!RULE_TYPES.includes(r.type as RuleType))
         throw new Error("不支持的规则类型");
       const type = r.type as RuleType;
@@ -152,8 +172,16 @@ export function parseRoutingConfig(input: unknown): RoutingConfig {
         if (!/^[a-zA-Z]{2}$/.test(value))
           throw new Error("GEOIP 使用两位国家代码");
         value = value.toUpperCase();
+      } else if (type === "RULE-SET") {
+        if (!findRuleSet(value)) throw new Error("规则集不存在");
       } else value = cidr(value, type === "IP-CIDR6");
-      return { type, value, target: target(r.target) };
+      const n = note(r.note);
+      return {
+        type,
+        value,
+        target: target(r.target),
+        ...(n === undefined ? {} : { note: n }),
+      };
     } catch (e) {
       throw new Error(`第 ${i + 1} 条规则：${(e as Error).message}`);
     }
@@ -166,19 +194,54 @@ export function defaultRoutingConfig(): RoutingConfig {
 export function groupTag(group: RoutingGroup): string {
   return `📂 ${group.name} (${group.id})`;
 }
-export function clashTarget(config: RoutingConfig, target: string): string {
+/**
+ * regions：本次订阅实际生成的地区组键。地区去向只是偏好，缺该地区节点时
+ * 回退到节点选择（不报错、不直连）；节点组则由管理员显式绑定，缺成员时由渲染层报错。
+ */
+export function clashTarget(
+  config: RoutingConfig,
+  target: string,
+  regions: ReadonlySet<string> = new Set(),
+): string {
   if (target === "PROXY") return "🚀 节点选择";
+  const region = regionOfTarget(target);
+  if (region !== null) {
+    const r = REGIONS.find((x) => x.key === region);
+    return r && regions.has(region) ? r.name : "🚀 节点选择";
+  }
   const group = config.groups.find((g) => g.id === target);
   return group ? groupTag(group) : target;
 }
-export function clashRules(config: RoutingConfig): string[] {
+export function clashRules(
+  config: RoutingConfig,
+  regions: ReadonlySet<string> = new Set(),
+): string[] {
   return [
     ...config.rules.map(
       (r) =>
-        `${r.type},${r.value},${clashTarget(config, r.target)}${r.type.startsWith("IP-CIDR") ? ",no-resolve" : ""}`,
+        `${r.type},${r.value},${clashTarget(config, r.target, regions)}${r.type.startsWith("IP-CIDR") ? ",no-resolve" : ""}`,
     ),
-    `MATCH,${clashTarget(config, config.final)}`,
+    `MATCH,${clashTarget(config, config.final, regions)}`,
   ];
+}
+/** Clash rule-providers：只声明被引用的规则集，内容由客户端下载。 */
+export function ruleProviders(config: RoutingConfig) {
+  const providers: Record<
+    string,
+    { type: "http"; behavior: string; url: string; path: string; interval: number }
+  > = {};
+  for (const r of config.rules) {
+    const set = r.type === "RULE-SET" ? findRuleSet(r.value) : undefined;
+    if (set)
+      providers[set.id] = {
+        type: "http",
+        behavior: set.behavior,
+        url: set.url,
+        path: `./ruleset/${set.id}.yaml`,
+        interval: 86400,
+      };
+  }
+  return providers;
 }
 export function previewDomain(config: RoutingConfig, input: unknown) {
   const domain = normalizeDomain(input);
@@ -200,7 +263,7 @@ export function previewDomain(config: RoutingConfig, input: unknown) {
         index,
         target: r.target,
         uncertain,
-        note: "仅预览域名规则；不执行 DNS/IP/GEOIP 匹配",
+        note: "仅预览域名规则；不执行 DNS/IP/GEOIP/规则集匹配",
       };
   }
   return {
@@ -208,6 +271,6 @@ export function previewDomain(config: RoutingConfig, input: unknown) {
     index: null,
     target: config.final,
     uncertain,
-    note: "未命中域名规则；不执行 DNS/IP/GEOIP 匹配，实际结果可能不同",
+    note: "未命中域名规则；不执行 DNS/IP/GEOIP/规则集匹配，实际结果可能不同",
   };
 }

@@ -22,6 +22,18 @@
 
 `DOMAIN` 为完整域名；`DOMAIN-SUFFIX` 同时匹配域名自身和以点分隔的子域；`DOMAIN-KEYWORD` 按包含匹配。域名输入不带协议、路径或 `*`，支持规范化 IDNA。CIDR 必须写掩码，IPv6 不带方括号。`GEOIP` 使用两位国家代码，仅支持 Clash 输出。
 
+## 远程规则集、地区去向与备注
+
+```json
+{ "type": "RULE-SET", "value": "reject", "target": "REJECT", "note": "广告" }
+{ "type": "DOMAIN-SUFFIX", "value": "openai.com", "target": "region:us", "note": "ChatGPT" }
+```
+
+- `RULE-SET` 的 `value` 只能是内置目录里的 ID（见 `src/lib/rulesets.ts`，来自 [Loyalsoldier/clash-rules](https://github.com/Loyalsoldier/clash-rules)：`reject`、`private`、`applications`、`icloud`、`apple`、`proxy`、`gfw`、`direct`、`tld-not-cn`、`telegramcidr`、`lancidr`、`cncidr`），不支持自定义 URL。Clash 输出只为被引用的规则集生成 `rule-providers`，由客户端每天自行下载；Worker 不下载、不读写 KV。
+- `target` / `final` 可以写 `region:hk|tw|jp|sg|us|eu`，对应订阅里的地区组（🇭🇰 香港等）。某个 token 没有该地区节点时，这条规则改走 `🚀 节点选择`，订阅不会失败，也不会改成直连。
+- `note` 可选，最多 64 个字符，只用于管理和 Hiddify 规则名，不写入 Clash 规则行。
+- 规则集与地区去向仅 Clash 支持，Hiddify 导出会返回 422 并说明原因；备注会作为 Hiddify 的规则名导出。
+
 规则从上到下执行；`final` 是 TCP/UDP 兜底。Clash 的 `PROXY` 对应节点选择组；Hiddify 的 `PROXY` 对应客户端当前选择的代理。Hiddify 文件使用原生 protobuf 编号字段，不能直接当作本网站配置 JSON 导入。
 
 ## Clash 专属策略组
@@ -45,7 +57,7 @@
 
 - 文档最大 64 KiB；最多 32 组、256 规则；组 ID 唯一、单组至多 128 个非重复源 ID。
 - 只接受声明的字段，无注释/尾逗号；不支持任意 YAML、规则脚本或自动合并上游规则。
-- `GET /api/routing`：当前配置、来源、内置默认值。
+- `GET /api/routing`：当前配置、来源、内置默认值、远程规则集目录。
 - `PUT /api/routing`：校验后保存配置；`DELETE /api/routing`：恢复默认。
 - `POST /api/routing/validate`：校验草稿并返回 Hiddify 不兼容项。
 - `POST /api/routing/preview`：`{ "config": <配置>, "domain": "example.org" }`；不执行 DNS/IP/GEOIP。

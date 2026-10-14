@@ -1,4 +1,4 @@
-import type { RoutingConfig } from "./routing";
+import { regionOfTarget, type RoutingConfig } from "./routing";
 
 /** Hiddify 4.1.1 的 Dart protobuf writeToJson 格式；不是 sing-box JSON。
  * 字段编号和枚举来源：hiddify-app v4.1.1 的 route_rule.pb.dart/pbenum.dart。
@@ -15,14 +15,20 @@ const FIELDS: Record<string, string> = {
 export function hiddifyIssues(config: RoutingConfig): string[] {
  const errors: string[] = [];
  for (const [i, rule] of config.rules.entries()) {
-  if (!(rule.target in OUTBOUND))
-   errors.push(`第 ${i + 1} 条规则引用 Clash 专属策略组`);
-  if (!(rule.type in FIELDS))
+  if (rule.type === "RULE-SET")
+   errors.push(`第 ${i + 1} 条规则使用远程规则集，Hiddify 原生规则无法引用`);
+  else if (!(rule.type in FIELDS))
    errors.push(
     `第 ${i + 1} 条规则的 ${rule.type} 不能直接导入 Hiddify 原生规则；请明确调整配置，不会自动忽略`,
    );
+  if (regionOfTarget(rule.target) !== null)
+   errors.push(`第 ${i + 1} 条规则指向地区组，Hiddify 只支持代理/直连/拦截`);
+  else if (!(rule.target in OUTBOUND))
+   errors.push(`第 ${i + 1} 条规则引用 Clash 专属策略组`);
  }
- if (!(config.final in OUTBOUND)) errors.push("兜底引用 Clash 专属策略组");
+ if (regionOfTarget(config.final) !== null)
+  errors.push("兜底指向地区组，Hiddify 只支持代理/直连/拦截");
+ else if (!(config.final in OUTBOUND)) errors.push("兜底引用 Clash 专属策略组");
  return errors;
 }
 export function buildHiddifyRules(config: RoutingConfig) {
@@ -31,7 +37,7 @@ export function buildHiddifyRules(config: RoutingConfig) {
  const rules = config.rules.map((r, i) => ({
   "1": i,
   "2": true,
-  "3": `${r.type} ${r.value}`,
+  "3": r.note || `${r.type} ${r.value}`,
   "4": OUTBOUND[r.target]!,
   [FIELDS[r.type]!]: [r.value],
  }));

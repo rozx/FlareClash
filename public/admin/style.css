@@ -398,6 +398,7 @@ dialog .footer {
  --c-direct: var(--ok);
  --c-reject: var(--err);
  --c-group: var(--warn);
+ --c-region: #b07cff;
 }
 .routing-page h1 {
  margin: 0;
@@ -456,6 +457,91 @@ dialog .footer {
 .routing-add .form-error:empty {
  display: none;
 }
+.routing-tabs {
+ display: flex;
+ gap: 4px;
+ margin-bottom: 12px;
+ padding: 3px;
+ border-radius: 9px;
+ background: var(--bg);
+ width: fit-content;
+ max-width: 100%;
+}
+.routing-tabs button {
+ border: none;
+ background: none;
+ color: var(--muted);
+ padding: 6px 14px;
+}
+.routing-tabs button.is-active {
+ background: var(--panel-2);
+ color: var(--text);
+}
+.preset-grid {
+ display: grid;
+ grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+ gap: 8px;
+ margin: 8px 0 4px;
+}
+.preset-card,
+.preset-row {
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ padding: 8px 10px;
+ border: 1px solid var(--border);
+ border-radius: 8px;
+ background: var(--panel-2);
+}
+.preset-card {
+ cursor: pointer;
+}
+.preset-card:has(input:checked),
+.preset-row:has(input:checked) {
+ border-color: var(--accent);
+}
+.preset-card.is-added,
+.preset-row.is-added {
+ opacity: 0.55;
+ cursor: default;
+}
+.preset-text {
+ display: flex;
+ flex-direction: column;
+ min-width: 0;
+ line-height: 1.35;
+}
+label.preset-text {
+ flex-direction: row;
+ align-items: center;
+ gap: 10px;
+ flex: 1;
+ cursor: pointer;
+}
+label.preset-text > span {
+ display: flex;
+ flex-direction: column;
+ min-width: 0;
+}
+.preset-text small {
+ color: var(--muted);
+ font-size: 12px;
+}
+.preset-list {
+ display: flex;
+ flex-direction: column;
+ gap: 6px;
+ margin: 8px 0 4px;
+}
+.preset-row select {
+ width: 150px;
+ flex-shrink: 0;
+ padding: 6px 8px;
+}
+.routing-add-submit {
+ justify-content: flex-end;
+ margin-top: 10px;
+}
 
 /* 规则列表 */
 .rule-table {
@@ -489,6 +575,9 @@ dialog .footer {
 }
 .rule-row.target-group {
  border-left-color: var(--c-group);
+}
+.rule-row.target-region {
+ border-left-color: var(--c-region);
 }
 .rule-row.rule-head {
  background: none;
@@ -533,6 +622,20 @@ dialog .footer {
 }
 .rule-hint:empty {
  display: none;
+}
+.rule-row input.rule-note {
+ margin-top: 3px;
+ padding: 2px 8px;
+ border-color: transparent;
+ background: transparent;
+ color: var(--muted);
+ font-size: 12px;
+}
+.rule-row input.rule-note:hover,
+.rule-row input.rule-note:focus {
+ border-color: var(--border);
+ background: var(--bg);
+ color: var(--text);
 }
 .rule-actions {
  display: flex;
@@ -755,6 +858,12 @@ button:disabled {
  .routing-savebar {
   flex-direction: column;
   align-items: stretch;
+ }
+ .preset-row {
+  flex-wrap: wrap;
+ }
+ .preset-row select {
+  width: 100%;
  }
  .routing-toolbar button {
   flex: 1 1 auto;
