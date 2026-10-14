@@ -75,6 +75,18 @@ npx wrangler deploy
 
 管理后台创建 token 后可分别复制这三种完整 URL。路径格式优先于 `?format=` 与 User-Agent。Hiddify 的 UA 同时含 `ClashMeta`，但自动端点会优先识别 `HiddifyNext` 并返回单行 Base64，避免其下载层破坏 Clash YAML 缩进。
 
+### 已部署过：换机器或重新 clone 后更新
+
+`wrangler.toml` 不入库，手填容易和线上不一致，而 `wrangler deploy` 会用本地的变量和兼容日期静默覆盖线上值。改用脚本从线上拉取：
+
+```bash
+npx wrangler login
+npm run config:pull     # 读取线上当前版本，按模板生成 wrangler.toml
+npm run config:check    # 部署前自检：本地与线上有差异时退出码 1，并列出差异
+```
+
+拉取范围是兼容日期/标志、D1/KV 资源 ID 与库名、`[vars]`；密钥只列名字（值本来就存在线上，部署不会动）。本地已有 `wrangler.toml` 且内容不同时，`config:pull` 只打印差异、不覆盖，确认以线上为准后加 `-- --force`。路由与自定义域 wrangler CLI 读不到，不在拉取范围内：配置里不写 `routes` 时部署不会改动它们，但会默认开启 workers.dev。
+
 ### 本地开发
 
 ```bash

@@ -11,6 +11,8 @@ npm run typecheck    # tsc --noEmit
 npm run dry-run      # wrangler deploy --dry-run
 npm run deploy       # wrangler deploy（生产）
 npm run db:migrate:remote   # 远端 D1 migration
+npm run config:pull  # 从线上拉取配置生成 wrangler.toml（有差异不覆盖，--force 强制）
+npm run config:check # 部署前自检：本地 wrangler.toml 与线上不一致时退出码 1
 ```
 
 改动后最低验证线：`typecheck` + `test` + `dry-run` 三绿再提交。
@@ -34,7 +36,7 @@ tests/unit/         纯逻辑单测；tests/integration/ 走真实 D1/KV（vites
 
 1. **KV 免费额度是唯一紧约束**：1000 写/天。成功回源 = 3 写（data+dataAt+fetched），失败 = 1 写（仅 fetched）。`MIN_FETCH_INTERVAL` 是额度安全阀——任何新功能不得增加回源写次数；订阅端点与管理端探测共用同一节流阀。
 2. **绑定名不可改**：代码读 `env.DB` / `env.KV`（不是 wrangler 建议的资源名）。
-3. **`wrangler.toml` 不入库**（含真实资源 ID），入库的是 `wrangler.toml.example` 模板；`.dev.vars` 同理。secrets 走 `wrangler secret put`。
+3. **`wrangler.toml` 不入库**（含真实资源 ID），入库的是 `wrangler.toml.example` 模板；`.dev.vars` 同理。本地缺失时用 `npm run config:pull` 从线上生成，不要手填（填错的变量/兼容日期会在 deploy 时静默覆盖线上值；wrangler 只在线上最后一次改动来自 Dashboard 时才提示差异）。secrets 走 `wrangler secret put`。
 4. **KV `data` 值是带版本的 envelope**（`fc-cache:v1:{json}`，含正文+订阅元数据）；读取必须兼容旧纯文本缓存（无前缀 → 视为无元数据正文）。升级 envelope 版本时保留向后兼容。
 5. **订阅响应必须带标准头**：聚合后的 `subscription-userinfo`（流量求和、expire 取最早正值、任一源 total=0 则总量 0=无限）与 `profile-update-interval`（取最短正值）；两种输出格式（YAML/base64）行为一致。畸形元数据降级忽略，不得让订阅失败。
 
@@ -65,5 +67,5 @@ tests/unit/         纯逻辑单测；tests/integration/ 走真实 D1/KV（vites
 
 - Worker: `flareclash`（`https://<your-worker>.workers.dev`，可选自定义域）；资源 ID 与域名只存在于本地不入库的 `wrangler.toml`，不得写入仓库任何文件
 - D1: `flareclash`（region ENAM）；KV: `CACHE`
-- 部署顺序：改 `wrangler.toml`（本地不入库文件）→ deploy → 需要时 `db:migrate:remote` → 验证生产响应头/内容。
+- 部署顺序：`config:check`（本地没有 `wrangler.toml` 先 `config:pull`）→ 有新 migration 时先 `db:migrate:remote`（迁移须兼容旧代码；新代码读写新列，先部署会报错）→ deploy → 验证生产响应头/内容。
 - 生产验证涉及真实订阅 token 时，输出中不得打印 token 全量与订阅正文（打印结构化检查结果即可）。
