@@ -15,12 +15,6 @@
 - 除登录端点外的所有管理 API MUST 校验会话 cookie，未认证请求返回 401；畸形 cookie MUST 视为未认证（401），不得导致 500
 - 未认证访问管理页面时 MUST 跳转或呈现登录界面，不暴露任何管理数据
 - 密码比较 MUST 为常量时间（不因前缀匹配长度产生时间差）
-- 登录尝试 MUST 按客户端 IP（取 `CF-Connecting-IP`；IPv6 按 /64 前缀归并）与全局两级计数，计数存 D1，MUST NOT 写 KV
-- 单 IP 在 15 分钟窗口内失败 5 次 MUST 锁定该 IP：首次 15 分钟，重复锁定逐次翻倍，上限 24 小时；该 IP 空闲 24 小时后翻倍级数清零；该 IP 登录成功时清零其计数
-- 全局在 1 小时窗口内失败 50 次 MUST 暂停所有密码登录 1 小时；已签发的有效会话 MUST 不受影响
-- 尝试额度 MUST 在比对密码之前原子预占，并发请求不得越过上限
-- 处于锁定的请求 MUST 返回 429 与 `Retry-After`（秒），MUST NOT 比对密码（即使密码正确也拒绝），MUST NOT 产生 D1 写入
-- `/api/_ping` MUST 返回 `warnings` 数组：`ADMIN_PASSWORD` 少于 16 个字符、未设置 `AUTH_SECRET` 时各给出一条提示；管理页 SHALL 展示这些提示。提示不得阻断登录
 
 #### Scenario: 登录成功
 
@@ -41,6 +35,16 @@
 
 - **WHEN** 携带无法 base64 解码的会话 cookie 请求管理 API
 - **THEN** 返回 401 而非 500
+
+### Requirement: 登录防爆破
+
+系统 SHALL 对密码登录尝试计数，并在失败次数超限时锁定登录，防止暴力破解。
+
+- 登录尝试 MUST 按客户端 IP（取 `CF-Connecting-IP`；IPv6 按 /64 前缀归并）与全局两级计数，计数存 D1，MUST NOT 写 KV
+- 单 IP 在 15 分钟窗口内失败 5 次 MUST 锁定该 IP：首次 15 分钟，重复锁定逐次翻倍，上限 24 小时；该 IP 空闲 24 小时后翻倍级数清零；该 IP 登录成功时清零其计数
+- 全局在 1 小时窗口内失败 50 次 MUST 暂停所有密码登录 1 小时；已签发的有效会话 MUST 不受影响
+- 尝试额度 MUST 在比对密码之前原子预占，并发请求不得越过上限
+- 处于锁定的请求 MUST 返回 429 与 `Retry-After`（秒），MUST NOT 比对密码（即使密码正确也拒绝），MUST NOT 产生 D1 写入
 
 #### Scenario: 单 IP 连续失败被锁定
 
@@ -71,6 +75,12 @@
 
 - **WHEN** 多个 IP 累计 1 小时内失败 50 次
 - **THEN** 任何 IP 的密码登录均返回 429，但已持有有效会话 cookie 的管理请求正常返回
+
+### Requirement: 认证弱配置提示
+
+系统 SHALL 在管理员认证相关配置偏弱时给出提示，但不因此阻断登录。
+
+- `/api/_ping` MUST 返回 `warnings` 数组：`ADMIN_PASSWORD` 少于 16 个字符、未设置 `AUTH_SECRET` 时各给出一条提示；管理页 SHALL 展示这些提示。提示不得阻断登录
 
 #### Scenario: 弱配置提示
 

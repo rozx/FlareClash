@@ -82,8 +82,6 @@
 - UA 属于 Clash 系（含 `clash`、`mihomo` 等标识）时，MUST 返回完整 Clash YAML：含全部合并节点、默认策略组（自动选择 + 按节点名正则匹配的地区分组）与默认规则集
 - Hiddify UA MUST 优先返回单行 base64，即使其 UA 同时含 `ClashMeta`；这是为了规避 Hiddify 下载层逐行 trim 破坏 YAML 缩进的兼容性问题
 - 其他 UA MUST 返回 base64 编码的分享链接列表（每行一条 `vmess://`/`ss://`/`trojan://`/`hysteria2://`/`vless://` 链接后整体 base64）
-- 请求可通过查询参数（如 `?format=clash` 或 `?format=base64`）显式指定格式，显式指定优先于 UA 判断
-- 系统 MUST 提供路径即格式的确定性端点：`/sub/clash/:token` 强制返回 Clash YAML，`/sub/base64/:token` 强制返回 base64；路径格式优先于查询参数与 UA
 
 #### Scenario: Clash 客户端请求
 
@@ -100,6 +98,13 @@
 - **WHEN** UA 形如 `HiddifyNext/... like ClashMeta v2ray sing-box`
 - **THEN** 响应仍为单行 base64，不返回会被客户端破坏缩进的 Clash YAML
 
+### Requirement: 显式指定输出格式
+
+系统 SHALL 允许请求显式指定输出格式，以覆盖按 UA 的自适应判断。
+
+- 请求可通过查询参数（如 `?format=clash` 或 `?format=base64`）显式指定格式，显式指定优先于 UA 判断
+- 系统 MUST 提供路径即格式的确定性端点：`/sub/clash/:token` 强制返回 Clash YAML，`/sub/base64/:token` 强制返回 base64；路径格式优先于查询参数与 UA
+
 #### Scenario: 显式格式覆盖
 
 - **WHEN** 请求带 `?format=base64` 但 UA 为 Clash
@@ -114,6 +119,8 @@
 
 - **WHEN** 任意 UA 请求 `/sub/base64/:token`
 - **THEN** 返回 base64 编码的分享链接列表，即使 UA 为 Clash
+
+### Requirement: VLESS 分享链接解析与逆向
 
 分享链接解析与逆向 SHALL 支持 `vless://` 链接：uuid、flow、`security=reality|tls`、sni、fp、pbk/sid（Reality 公钥/短 ID）、`type=ws|grpc` 传输层参数 MUST 完整保留；base64 输出端 vless 为可逆类型。
 
